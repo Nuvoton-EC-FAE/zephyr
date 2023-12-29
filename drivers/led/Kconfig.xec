@@ -1,0 +1,11 @@
+# Copyright (c) 2022 Microchip Technology Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+config LED_XEC
+	bool "Microchip XEC BB-LED driver"
+	default y
+        # Backport note: Drop this and use device tree when intercepting 3.2
+	depends on LED
+	help
+	  Enable driver for the Microchip XEC Breathing-Blinking
+	  LED controller

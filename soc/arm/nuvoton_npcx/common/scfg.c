@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <zephyr/device.h>
+#include <zephyr/init.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/dt-bindings/pinctrl/npcx-pinctrl.h>
 #include <zephyr/kernel.h>
@@ -19,6 +19,7 @@ LOG_MODULE_REGISTER(pimux_npcx, LOG_LEVEL_ERR);
 struct npcx_scfg_config {
 	/* scfg device base address */
 	uintptr_t base_scfg;
+	uintptr_t base_dbg;
 	uintptr_t base_glue;
 };
 
@@ -45,6 +46,7 @@ static const struct npcx_alt def_alts[] = {
 
 static const struct npcx_scfg_config npcx_scfg_cfg = {
 	.base_scfg = DT_REG_ADDR_BY_NAME(DT_NODELABEL(scfg), scfg),
+	.base_dbg = DT_REG_ADDR_BY_NAME(DT_NODELABEL(scfg), dbg),
 	.base_glue = DT_REG_ADDR_BY_NAME(DT_NODELABEL(scfg), glue),
 };
 
@@ -94,23 +96,42 @@ bool npcx_lvol_get_detect_level(int lvol_ctrl, int lvol_bit)
 
 void npcx_pinctrl_i2c_port_sel(int controller, int port)
 {
+#if defined(CONFIG_SOC_SERIES_NPCK3)
+	const uint32_t scfg_base = npcx_scfg_cfg.base_scfg;
+
+	/* Set DEVALTC bit to select port b, otherwise select port a */
+	if (port != 0) {
+		NPCX_DEVALT(scfg_base, 0x0c) |= BIT(7 - controller);
+	} else {
+		NPCX_DEVALT(scfg_base, 0x0c) &= ~BIT(7 - controller);
+	}
+#else
 	struct glue_reg *const inst_glue = HAL_GLUE_INST();
 
+	/* Set SMB_SEL bit to select port 1, otherwise select port 0 */
 	if (port != 0) {
 		inst_glue->SMB_SEL |= BIT(controller);
 	} else {
 		inst_glue->SMB_SEL &= ~BIT(controller);
 	}
+#endif
 }
 
 int npcx_pinctrl_flash_write_protect_set(void)
 {
 	struct scfg_reg *inst_scfg = HAL_SFCG_INST();
 
+#if defined(CONFIG_SOC_SERIES_NPCK3)
+	inst_scfg->DEV_CTL3 |= BIT(NPCk_DEV_CTL3_WP_IF);
+	if (!IS_BIT_SET(inst_scfg->DEV_CTL3, NPCk_DEV_CTL3_WP_IF)) {
+		return -EIO;
+	}
+#else
 	inst_scfg->DEV_CTL4 |= BIT(NPCX_DEV_CTL4_WP_IF);
 	if (!IS_BIT_SET(inst_scfg->DEV_CTL4, NPCX_DEV_CTL4_WP_IF)) {
 		return -EIO;
 	}
+#endif
 
 	return 0;
 }
@@ -129,19 +150,20 @@ void npcx_host_interface_sel(enum npcx_hif_type hif_type)
 	SET_FIELD(inst_scfg->DEVCNT, NPCX_DEVCNT_HIF_TYP_SEL_FIELD, hif_type);
 }
 
-/* Pin-control driver registration */
-static int npcx_scfg_init(const struct device *dev)
+void npcx_dbg_freeze_enable(bool enable)
 {
-	struct scfg_reg *inst_scfg = HAL_SFCG_INST();
+	const uintptr_t dbg_base = npcx_scfg_cfg.base_dbg;
 
-	/*
-	 * Set bit 7 of DEVCNT again for npcx7 series. Please see Errata
-	 * for more information. It will be fixed in next chip.
-	 */
-	if (IS_ENABLED(CONFIG_SOC_SERIES_NPCX7)) {
-		inst_scfg->DEVCNT |= BIT(7);
+	if (enable) {
+		NPCX_DBGFRZEN3(dbg_base) &= ~BIT(NPCX_DBGFRZEN3_GLBL_FRZ_DIS);
+	} else {
+		NPCX_DBGFRZEN3(dbg_base) |= BIT(NPCX_DBGFRZEN3_GLBL_FRZ_DIS);
 	}
+}
 
+/* Pin-control driver registration */
+static int npcx_scfg_init(void)
+{
 	/* Change all pads whose default functionality isn't IO to GPIO */
 	for (int i = 0; i < ARRAY_SIZE(def_alts); i++) {
 		npcx_pinctrl_alt_sel(&def_alts[i], 0);

@@ -27,4 +27,8 @@
 	((reg) = ((reg) & (~(((1 << (f_size))-1) << (f_pos)))) \
 			| ((value) << (f_pos)))
 
+#define GET_POS(field) \
+	_GET_POS_(FIELD_POS(field))
+#define _GET_POS_(f_ops) f_ops
+
 #endif /* _NUVOTON_NPCX_REG_ACCESS_H */

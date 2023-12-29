@@ -3,7 +3,7 @@
 # Copyright (c) 2020 Nuvoton Technology Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
-config I2C_NPCX
+menuconfig I2C_NPCX
 	bool "Nuvoton NPCX embedded controller (EC) I2C driver"
 	default y
 	depends on DT_HAS_NUVOTON_NPCX_I2C_PORT_ENABLED
@@ -11,3 +11,30 @@ config I2C_NPCX
 	  This option enables the I2C driver for NPCX family of
 	  processors.
 	  Say y if you wish to use I2C modules on NPCX MCU.
+
+config I2C_NPCX_PORT_INIT_PRIORITY
+	int "NPCX I2C port init priority"
+	default 51
+	depends on I2C_NPCX
+	help
+	  Initialization priority for the I2C port on an NPCX device, must be
+	  set to a lower priority than the controller one (I2C_INIT_PRIORITY).
+
+config I2C_NPCX_CTRL
+	bool "Nuvoton NPCX embedded controller (EC) I2C controller driver"
+	default y
+	depends on DT_HAS_NUVOTON_NPCX_I2C_PORT_ENABLED
+	help
+	  This option enables the I2C controller driver for NPCX family of
+	  processors.
+	  Say y if you wish to use I2C modules on NPCX MCU.
+
+if I2C_NPCX_CTRL
+config I2C_NPCX_DMA_DRIVEN
+	bool "Nuvoton NPCX embedded controller (EC) I2C controller driver with DMA support"
+	default y if SOC_SERIES_NPCK3
+	help
+	  This option enables the I2C controller driver which support DMA for NPCX family of
+	  processors.
+	  Say y if you wish to use I2C modules on NPCX MCU.
+endif #I2C_NPCX_DMA_DRIVEN

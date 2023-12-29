@@ -434,7 +434,26 @@ static int espi_xec_write_lpc_request(const struct device *dev,
 
 	return 0;
 }
+static int espi_xec_send_ltr(const struct device *dev, struct ltr_cfg_pkt *req)
+{
+	if (!(ESPI_PC_REGS->PC_STATUS & MCHP_ESPI_PC_STS_BM_EN)) {
+		return -ENOTSUP;
+	}
 
+	if (req->ltr_req) {
+		ESPI_LTR_REGS->LTR_MSG = MCHP_ESPI_LTR_MSG_REQ_VAL |
+				(req->latency << MCHP_ESPI_LTR_MSG_VAL_POS) |
+				(req->ltr_scale << MCHP_ESPI_LTR_MSG_SC_POS);
+	} else {
+		/* set infinite latency tolrated */
+		ESPI_LTR_REGS->LTR_MSG = MCHP_ESPI_LTR_MSG_REQ_INF;
+	}
+
+	/* Send LTR Packet */
+	ESPI_LTR_REGS->LTR_CTRL = MCHP_ESPI_LTR_CTRL_START;
+
+	return 0;
+}
 static int espi_xec_send_vwire(const struct device *dev,
 			       enum espi_vwire_signal signal, uint8_t level)
 {
@@ -965,6 +984,10 @@ static void setup_espi_io_config(const struct device *dev,
 static void espi_pc_isr(const struct device *dev)
 {
 	uint32_t status = ESPI_PC_REGS->PC_STATUS;
+	struct espi_event evt = { .evt_type = ESPI_BUS_EVENT_CHANNEL_READY,
+				  .evt_details = ESPI_CHANNEL_PERIPHERAL,
+				  .evt_data = 0 };
+	struct espi_xec_data *data = (struct espi_xec_data *)(dev->data);
 
 	if (status & MCHP_ESPI_PC_STS_EN_CHG) {
 		if (status & MCHP_ESPI_PC_STS_EN) {
@@ -972,6 +995,13 @@ static void espi_pc_isr(const struct device *dev)
 		}
 
 		ESPI_PC_REGS->PC_STATUS = MCHP_ESPI_PC_STS_EN_CHG;
+	} else if (status & MCHP_ESPI_PC_STS_BM_EN_CHG) {
+		if (status & MCHP_ESPI_PC_STS_BM_EN) {
+			evt.evt_data = ESPI_PC_EVT_BUS_MASTER_ENABLE;
+			espi_send_callbacks(&data->callbacks, dev, evt);
+		}
+
+		ESPI_PC_REGS->PC_STATUS = MCHP_ESPI_PC_STS_BM_EN_CHG;
 	}
 }
 
@@ -1371,6 +1401,7 @@ static void espi_xec_vw_isr(const struct device *dev)
 	uint32_t girq_result;
 
 	girq_result = MCHP_GIRQ_RESULT(config->vw_girq_ids[0]);
+	MCHP_GIRQ_SRC(config->vw_girq_ids[0]) = girq_result;
 
 	for (int i = 0; i < m2s_vwires_isr_cnt; i++) {
 		struct espi_isr entry = m2s_vwires_isr[i];
@@ -1381,8 +1412,6 @@ static void espi_xec_vw_isr(const struct device *dev)
 			}
 		}
 	}
-
-	REG32(MCHP_GIRQ_SRC_ADDR(config->vw_girq_ids[0])) = girq_result;
 }
 
 #if DT_INST_PROP_HAS_IDX(0, vw_girqs, 1)
@@ -1454,6 +1483,7 @@ static const struct espi_driver_api espi_xec_driver_api = {
 	.manage_callback = espi_xec_manage_callback,
 	.read_lpc_request = espi_xec_read_lpc_request,
 	.write_lpc_request = espi_xec_write_lpc_request,
+	.send_ltr = espi_xec_send_ltr,
 };
 
 static struct espi_xec_data espi_xec_data;
@@ -1527,8 +1557,11 @@ static int espi_xec_init(const struct device *dev)
 	/* Clear reset interrupt status and enable interrupts */
 	ESPI_CAP_REGS->ERST_STS = MCHP_ESPI_RST_ISTS;
 	ESPI_CAP_REGS->ERST_IEN |= MCHP_ESPI_RST_IEN;
-	ESPI_PC_REGS->PC_STATUS = MCHP_ESPI_PC_STS_EN_CHG;
-	ESPI_PC_REGS->PC_IEN |= MCHP_ESPI_PC_IEN_EN_CHG;
+	ESPI_PC_REGS->PC_STATUS |= MCHP_ESPI_PC_STS_EN_CHG |
+				 MCHP_ESPI_PC_STS_BM_EN_CHG;
+	ESPI_PC_REGS->PC_IEN |= MCHP_ESPI_PC_IEN_EN_CHG |
+				MCHP_ESPI_PC_IEN_BM_EN_CHG;
+
 
 	/* Enable VWires interrupts */
 	for (int i = 0; i < sizeof(vw_wires_int_en); i++) {
