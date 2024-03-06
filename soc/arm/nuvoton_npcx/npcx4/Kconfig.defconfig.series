@@ -14,12 +14,7 @@ config NUM_IRQS
 config CORTEX_M_SYSTICK
 	default !NPCX_ITIM_TIMER
 
-config ESPI_NPCX
-	default y
-	depends on ESPI
-
 config ESPI_TAF_NPCX
-    bool "ESPI TAF configuration option"
 	default y
 	depends on ESPI_SAF
 

@@ -5,6 +5,7 @@
  */
 
 #include <zephyr/init.h>
+#include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/dt-bindings/pinctrl/npcx-pinctrl.h>
 #include <zephyr/kernel.h>
@@ -96,42 +97,23 @@ bool npcx_lvol_get_detect_level(int lvol_ctrl, int lvol_bit)
 
 void npcx_pinctrl_i2c_port_sel(int controller, int port)
 {
-#if defined(CONFIG_SOC_SERIES_NPCK3)
-	const uint32_t scfg_base = npcx_scfg_cfg.base_scfg;
-
-	/* Set DEVALTC bit to select port b, otherwise select port a */
-	if (port != 0) {
-		NPCX_DEVALT(scfg_base, 0x0c) |= BIT(7 - controller);
-	} else {
-		NPCX_DEVALT(scfg_base, 0x0c) &= ~BIT(7 - controller);
-	}
-#else
 	struct glue_reg *const inst_glue = HAL_GLUE_INST();
 
-	/* Set SMB_SEL bit to select port 1, otherwise select port 0 */
 	if (port != 0) {
 		inst_glue->SMB_SEL |= BIT(controller);
 	} else {
 		inst_glue->SMB_SEL &= ~BIT(controller);
 	}
-#endif
 }
 
 int npcx_pinctrl_flash_write_protect_set(void)
 {
 	struct scfg_reg *inst_scfg = HAL_SFCG_INST();
 
-#if defined(CONFIG_SOC_SERIES_NPCK3)
-	inst_scfg->DEV_CTL3 |= BIT(NPCk_DEV_CTL3_WP_IF);
-	if (!IS_BIT_SET(inst_scfg->DEV_CTL3, NPCk_DEV_CTL3_WP_IF)) {
-		return -EIO;
-	}
-#else
 	inst_scfg->DEV_CTL4 |= BIT(NPCX_DEV_CTL4_WP_IF);
 	if (!IS_BIT_SET(inst_scfg->DEV_CTL4, NPCX_DEV_CTL4_WP_IF)) {
 		return -EIO;
 	}
-#endif
 
 	return 0;
 }
@@ -162,8 +144,9 @@ void npcx_dbg_freeze_enable(bool enable)
 }
 
 /* Pin-control driver registration */
-static int npcx_scfg_init(void)
+static int npcx_scfg_init(const struct device *dev)
 {
+	ARG_UNUSED(dev);
 	/* Change all pads whose default functionality isn't IO to GPIO */
 	for (int i = 0; i < ARRAY_SIZE(def_alts); i++) {
 		npcx_pinctrl_alt_sel(&def_alts[i], 0);

@@ -325,8 +325,9 @@ uint64_t npcx_clock_get_sleep_ticks(void)
 }
 #endif /* CONFIG_PM */
 
-static int sys_clock_driver_init(void)
+static int sys_clock_driver_init(const struct device *dev)
 {
+	ARG_UNUSED(dev);
 	int ret;
 	uint32_t sys_tmr_rate;
 	const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);

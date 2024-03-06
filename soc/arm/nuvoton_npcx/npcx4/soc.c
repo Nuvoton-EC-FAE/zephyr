@@ -18,8 +18,9 @@ static uintptr_t fiu_insts[] = {
 	DT_FOREACH_STATUS_OKAY(nuvoton_npcx_fiu_qspi, NPCX_FIU_INST_INIT)
 };
 
-static int soc_npcx4_init(void)
+static int soc_npcx4_init(const struct device *dev)
 {
+	ARG_UNUSED(dev);
 	/*
 	 * Make sure UMA_ADDR_SIZE field of UMA_ECTS register is zero in npcx4
 	 * series. There should be no address field in UMA mode by default.

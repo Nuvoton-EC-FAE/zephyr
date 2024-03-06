@@ -27,30 +27,17 @@ NPCX_REG_OFFSET_CHECK(scfg_reg, DEVALT0, 0x010);
 NPCX_REG_OFFSET_CHECK(scfg_reg, LV_GPIO_CTL0, 0x02a);
 
 /* GLUE register structure check */
-#if defined(CONFIG_SOC_SERIES_NPCK3)
-NPCX_REG_SIZE_CHECK(glue_reg, 0x03b);
-#else
 NPCX_REG_SIZE_CHECK(glue_reg, 0x028);
-#endif
 NPCX_REG_OFFSET_CHECK(glue_reg, SMB_EEN, 0x003);
 NPCX_REG_OFFSET_CHECK(glue_reg, SDPD0, 0x010);
 NPCX_REG_OFFSET_CHECK(glue_reg, SMB_SEL, 0x021);
 NPCX_REG_OFFSET_CHECK(glue_reg, PSL_CTS, 0x027);
-#if defined(CONFIG_SOC_SERIES_NPCK3)
-NPCX_REG_OFFSET_CHECK(glue_reg, EPURST_CTL, 0x030);
-NPCX_REG_OFFSET_CHECK(glue_reg, PSL_CTS3, 0x038);
-#endif
 
 /* UART register structure check */
 NPCX_REG_SIZE_CHECK(uart_reg, 0x027);
 NPCX_REG_OFFSET_CHECK(uart_reg, UPSR, 0x00e);
-#if defined(CONFIG_SOC_SERIES_NPCK3)
-NPCX_REG_OFFSET_CHECK(uart_reg, UFCTRL, 0x016);
-NPCX_REG_OFFSET_CHECK(uart_reg, URXFLV, 0x01A);
-#else
 NPCX_REG_OFFSET_CHECK(uart_reg, UFTSTS, 0x020);
 NPCX_REG_OFFSET_CHECK(uart_reg, UFRCTL, 0x026);
-#endif
 
 /* GPIO register structure check */
 NPCX_REG_SIZE_CHECK(gpio_reg, 0x008);
@@ -130,20 +117,14 @@ NPCX_REG_OFFSET_CHECK(c2h_reg, CRSMAE, 0x008);
 NPCX_REG_OFFSET_CHECK(c2h_reg, SIBCTRL, 0x00a);
 
 /* SMB register structure check */
-NPCX_REG_SIZE_CHECK(smb_reg, 0x030);
+NPCX_REG_SIZE_CHECK(smb_reg, 0x020);
 NPCX_REG_OFFSET_CHECK(smb_reg, SMBCTL1, 0x006);
+NPCX_REG_OFFSET_CHECK(smb_reg, SMBT_OUT, 0x00f);
 NPCX_REG_OFFSET_CHECK(smb_reg, SMBADDR6, 0x016);
 NPCX_REG_OFFSET_CHECK(smb_reg, SMBCST2, 0x018);
 NPCX_REG_OFFSET_CHECK(smb_reg, SMBTXF_STS, 0x01a);
 NPCX_REG_OFFSET_CHECK(smb_reg, SMBSCLHT, 0x01e);
 NPCX_REG_OFFSET_CHECK(smb_reg, SMBRXF_CTL, 0x01e);
-#if defined(CONFIG_I2C_NPCX_DMA_DRIVEN)
-NPCX_REG_OFFSET_CHECK(smb_reg, DMA_CTRL, 0x00f);
-NPCX_REG_OFFSET_CHECK(smb_reg, DMA_ADDR3, 0x022);
-NPCX_REG_OFFSET_CHECK(smb_reg, TIMEOUT_CTL1, 0x029);
-#else
-NPCX_REG_OFFSET_CHECK(smb_reg, SMBT_OUT, 0x00f);
-#endif /* CONFIG_I2C_NPCX_DMA_DRIVEN */
 
 /* ITIM register structure check */
 NPCX_REG_SIZE_CHECK(itim32_reg, 0x00c);
@@ -183,8 +164,6 @@ NPCX_REG_OFFSET_CHECK(ps2_reg, PSIEN, 0x00a);
 /* FIU register structure check */
 #if defined(CONFIG_SOC_SERIES_NPCX9) || defined(CONFIG_SOC_SERIES_NPCX4)
 NPCX_REG_SIZE_CHECK(fiu_reg, 0x040);
-#elif defined(CONFIG_SOC_SERIES_NPCK3)
-NPCX_REG_SIZE_CHECK(fiu_reg, 0x044);
 #else
 NPCX_REG_SIZE_CHECK(fiu_reg, 0x034);
 #endif
@@ -206,3 +185,7 @@ NPCX_REG_SIZE_CHECK(kbs_reg, 0x010);
 NPCX_REG_OFFSET_CHECK(kbs_reg, KBSIN, 0x004);
 NPCX_REG_OFFSET_CHECK(kbs_reg, KBSOUT0, 0x006);
 NPCX_REG_OFFSET_CHECK(kbs_reg, KBS_BUF_INDX, 0x00a);
+
+/* SPIP register structure check */
+NPCX_REG_SIZE_CHECK(spip_reg, 0x006);
+NPCX_REG_OFFSET_CHECK(spip_reg, SPIP_CTL1, 0x002);

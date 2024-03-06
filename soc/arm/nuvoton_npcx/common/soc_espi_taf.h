@@ -13,16 +13,30 @@
 extern "C" {
 #endif
 
-/* data operation for eSPI TAF packet */
-#define MSN(var8)        ((uint8_t)((uint8_t)(var8) >> 4))
-#define LSN(var8)        ((uint8_t)((uint8_t)(var8) & 0x0F))
+/* Transmit buffer for eSPI TAF transaction on NPCX              */
+/* +-------------+--------------+--------------+---------------+ */
+/* |   Byte 3    |    Byte 2    |    Byte 1    |    Byte 0     | */
+/* +-------------+--------------+--------------+---------------+ */
+/* |   Length    |  Tag |Length |     Type     |    PKT_LEN    | */
+/* |   [7:0]     |      |[11:8] |              |               | */
+/* +-------------+--------------+--------------+---------------+ */
+/* |   Data 3    |     Data 2   |    Data 1    |    Data 0     | */
+/* +-------------+--------------+--------------+---------------+ */
+/* |   Data 7    |     Data 6   |    Data 5    |    Data 4     | */
+/* +-------------+--------------+--------------+---------------+ */
+/* |    ...      |     ...      |    ...       |      ...      | */
+/* +-------------+--------------+--------------+---------------+ */
+/* |  Data 63    |    Data 62   |    Data 61   |    Data 60    | */
+/* +-------------+--------------+--------------+---------------+ */
+/* PKT_LEN holds the sum of header (Type, Tag and Length) length */
+/* and data length                                               */
 
-#define MSB0(var32)      ((uint8_t)(((uint32_t)(var32) & 0xFF000000) >> 24))
-#define MSB1(var32)      ((uint8_t)(((uint32_t)(var32) & 0xFF0000) >> 16))
-#define MSB2(var32)      ((uint8_t)(((uint16_t)(var32) & 0xFF00) >> 8))
-#define MSB3(var32)      ((uint8_t)((var32) & 0xFF))
-
-#define MAKE8(nlo, nhi)  ((uint8_t)(((uint8_t)(nlo)) | (((uint8_t)(nhi)) << 4)))
+/*
+ * NPCX_TAF_CMP_HEADER_LEN is the preamble length of Type, Length
+ * and Tag (i.e. byte 1~byte 3) for flash access completion packet
+ * on NPCX
+ */
+#define NPCX_TAF_CMP_HEADER_LEN                    3
 
 /* Successful Completion Without Data     */
 #define CYC_SCS_CMP_WITHOUT_DATA                   0x06
@@ -41,63 +55,57 @@ extern "C" {
 /* Unsuccessful Only Completion Without Data */
 #define CYC_UNSCS_CMP_WITHOUT_DATA_ONLY            0x0E
 
-/* TAF EC Portal read/write flash access limited to 1-64 bytes*/
-#define MAX_FLASH_REQUEST                          64u
+/* Timeout for checking transmit buffer available and no completion was sent */
+#define NPCX_FLASH_CHK_TIMEOUT                     10000
 
 /* Clear RSTBUFHEADS, FLASH_ACC_TX_AVAIL, and FLASH_ACC_NP_FREE */
-#define FLASHCTL_ACCESS_MASK                       (~0x00002003)
+#define NPCX_FLASHCTL_ACCESS_MASK     (~(BIT(NPCX_FLASHCTL_RSTBUFHEADS) |   \
+					 BIT(NPCX_FLASHCTL_FLASH_NP_FREE) | \
+					 BIT(NPCX_FLASHCTL_FLASH_TX_AVAIL)))
 
 /* Flash Sharing Capability Support */
-#define ESPI_FLASH_SHARING_CAP_SUPP_CAF_DEF        0
-#define ESPI_FLASH_SHARING_CAP_SUPP_CAF            1
-#define ESPI_FLASH_SHARING_CAP_SUPP_TAF            2
-#define ESPI_FLASH_SHARING_CAP_SUPP_TAF_AND_CAF    3
+#define NPCX_FLASH_SHARING_CAP_SUPP_CAF            0
+#define NPCX_FLASH_SHARING_CAP_SUPP_TAF            2
+#define NPCX_FLASH_SHARING_CAP_SUPP_TAF_AND_CAF    3
 
-#define _4KB_                                      (4 * 1024)
-#define _32KB_                                     (32 * 1024)
-#define _64KB_                                     (64 * 1024)
-#define _128KB_                                    (128 * 1024)
-
-enum ESPI_TAF_MODE {
-	ESPI_TAF_STANDARD_MODE                     = 0,
-	ESPI_TAF_AUTO_MODE                         = 1,
+enum NPCX_ESPI_TAF_REQ {
+	NPCX_ESPI_TAF_REQ_READ,
+	NPCX_ESPI_TAF_REQ_WRITE,
+	NPCX_ESPI_TAF_REQ_ERASE,
+	NPCX_ESPI_TAF_REQ_RPMC_OP1,
+	NPCX_ESPI_TAF_REQ_RPMC_OP2,
+	NPCX_ESPI_TAF_REQ_UNKNOWN,
 };
 
-enum ESPI_FLASH_TAF_REQ {
-	ESPI_FLASH_TAF_REQ_READ                    = 0,
-	ESPI_FLASH_TAF_REQ_WRITE                   = 1,
-	ESPI_FLASH_TAF_REQ_ERASE                   = 2,
-	ESPI_FLASH_TAF_REQ_RPMC_OP1                = 3,
-	ESPI_FLASH_TAF_REQ_RPMC_OP2                = 4,
-	ESPI_FLASH_TAF_REQ_UNKNOWN                 = 5,
+/* NPCX_ESPI_TAF_ERASE_BLOCK_SIZE_4KB is default */
+enum NPCX_ESPI_TAF_ERASE_BLOCK_SIZE {
+	NPCX_ESPI_TAF_ERASE_BLOCK_SIZE_1KB,
+	NPCX_ESPI_TAF_ERASE_BLOCK_SIZE_2KB,
+	NPCX_ESPI_TAF_ERASE_BLOCK_SIZE_4KB,
+	NPCX_ESPI_TAF_ERASE_BLOCK_SIZE_8KB,
+	NPCX_ESPI_TAF_ERASE_BLOCK_SIZE_16KB,
+	NPCX_ESPI_TAF_ERASE_BLOCK_SIZE_32KB,
+	NPCX_ESPI_TAF_ERASE_BLOCK_SIZE_64KB,
+	NPCX_ESPI_TAF_ERASE_BLOCK_SIZE_128KB,
 };
 
-/* ESPI_FLASH_TAF_ERASE_BLOCK_SIZE_4KB is default */
-enum ESPI_FLASH_TAF_ERASE_BLOCK_SIZE {
-	ESPI_FLASH_TAF_ERASE_BLOCK_SIZE_1KB        = 0,
-	ESPI_FLASH_TAF_ERASE_BLOCK_SIZE_2KB        = 1,
-	ESPI_FLASH_TAF_ERASE_BLOCK_SIZE_4KB        = 2,
-	ESPI_FLASH_TAF_ERASE_BLOCK_SIZE_8KB        = 3,
-	ESPI_FLASH_TAF_ERASE_BLOCK_SIZE_16KB       = 4,
-	ESPI_FLASH_TAF_ERASE_BLOCK_SIZE_32KB       = 5,
-	ESPI_FLASH_TAF_ERASE_BLOCK_SIZE_64KB       = 6,
-	ESPI_FLASH_TAF_ERASE_BLOCK_SIZE_128KB      = 7,
+/* NPCX_ESPI_TAF_MAX_READ_REQ_64B is default */
+enum NPCX_ESPI_TAF_MAX_READ_REQ {
+	NPCX_ESPI_TAF_MAX_READ_REQ_64B            = 1,
+	NPCX_ESPI_TAF_MAX_READ_REQ_128B,
+	NPCX_ESPI_TAF_MAX_READ_REQ_256B,
+	NPCX_ESPI_TAF_MAX_READ_REQ_512B,
+	NPCX_ESPI_TAF_MAX_READ_REQ_1024B,
+	NPCX_ESPI_TAF_MAX_READ_REQ_2048B,
+	NPCX_ESPI_TAF_MAX_READ_REQ_4096B,
 };
 
-/* ESPI_FLASH_TAF_MAX_READ_REQ_64B is default */
-enum ESPI_FLASH_TAF_MAX_READ_REQ {
-	ESPI_FLASH_TAF_MAX_READ_REQ_64B            = 1,
-	ESPI_FLASH_TAF_MAX_READ_REQ_128B           = 2,
-	ESPI_FLASH_TAF_MAX_READ_REQ_256B           = 3,
-	ESPI_FLASH_TAF_MAX_READ_REQ_512B           = 4,
-	ESPI_FLASH_TAF_MAX_READ_REQ_1024B          = 5,
-	ESPI_FLASH_TAF_MAX_READ_REQ_2048B          = 6,
-	ESPI_FLASH_TAF_MAX_READ_REQ_4096B          = 7,
-};
-
+/*
+ * The configurations of SPI flash are set in FIU module.
+ * Thus, eSPI TAF driver of NPCX does not need additional hardware configuarations.
+ * Therefore, define an empty structure here to comply with espi_saf.h
+ */
 struct espi_saf_hw_cfg {
-	uint8_t  version;
-	enum ESPI_TAF_MODE mode;
 };
 
 struct espi_saf_pr {
@@ -121,14 +129,19 @@ struct espi_taf_npcx_pckt {
 	uint8_t *data;
 };
 
-struct espi_saf_packet;
-
 struct espi_taf_pckt {
 	uint8_t  type;
 	uint8_t  tag;
 	uint32_t addr;
 	uint16_t len;
 	uint32_t src[16];
+};
+
+struct npcx_taf_head {
+	uint8_t pkt_len;
+	uint8_t type;
+	uint8_t tag_hlen;
+	uint8_t llen;
 };
 
 #ifdef __cplusplus

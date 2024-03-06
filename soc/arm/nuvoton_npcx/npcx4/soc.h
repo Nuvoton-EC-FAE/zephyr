@@ -27,9 +27,6 @@
 #define NPCX_WKST_OFFSET(n)		(0x006 + (n * 0x010))
 #define NPCX_WKINEN_OFFSET(n)		(0x007 + (n * 0x010))
 
-/* NPCX4 PMC multi-registers */
-#define NPCX_PWDWN_CTL_OFFSET(n)	((n < 6) ? (0x008 + n) : (0x01e + n))
-
 /* NPCX4 ADC multi-registers */
 #define NPCX_CHNDAT_OFFSET(n)		(0x040 + n * 2)
 #define NPCX_THRCTL_OFFSET(n)		(0x080 + n * 2)
@@ -58,13 +55,8 @@
 #include <reg/reg_def.h>
 #include <soc_dt.h>
 #include <soc_clock.h>
+#include <soc_espi_taf.h>
 #include <soc_pins.h>
 #include <soc_power.h>
-
-/* NPCX4 Clock prescaler configurations */
-#define VAL_HFCGP   ((FPRED_VAL << 4) | AHB6DIV_VAL)
-#define VAL_HFCBCD  ((FIU1DIV_VAL << 4) | (FIUDIV_VAL << 2))
-#define VAL_HFCBCD1 (APB1DIV_VAL | (APB2DIV_VAL << 4))
-#define VAL_HFCBCD2 (APB3DIV_VAL | (APB4DIV_VAL << 4))
 
 #endif /* _NUVOTON_NPCX_SOC_H_ */

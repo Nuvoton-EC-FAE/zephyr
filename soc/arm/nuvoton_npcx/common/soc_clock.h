@@ -145,6 +145,20 @@ struct npcx_clk_cfg {
 #error "Unsupported OFMCLK Frequency"
 #endif
 
+/* Clock prescaler configurations in different series */
+#define VAL_HFCGP   ((FPRED_VAL << 4) | AHB6DIV_VAL)
+#if defined(FIU1DIV_VAL)
+#define VAL_HFCBCD  ((FIU1DIV_VAL << 4) | (FIUDIV_VAL << 2))
+#else
+#define VAL_HFCBCD  (FIUDIV_VAL << 4)
+#endif /* FIU1DIV_VAL */
+#define VAL_HFCBCD1 (APB1DIV_VAL | (APB2DIV_VAL << 4))
+#if defined(APB4DIV_VAL)
+#define VAL_HFCBCD2 (APB3DIV_VAL | (APB4DIV_VAL << 4))
+#else
+#define VAL_HFCBCD2 APB3DIV_VAL
+#endif /* APB4DIV_VAL */
+
 /**
  * @brief Function to notify clock driver that backup the counter value of
  *        low-frequency timer before ec entered deep idle state.
