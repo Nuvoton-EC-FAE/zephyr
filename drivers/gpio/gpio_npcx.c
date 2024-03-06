@@ -12,7 +12,7 @@
 #include <zephyr/dt-bindings/gpio/nuvoton-npcx-gpio.h>
 #include <soc.h>
 
-#include "gpio_utils.h"
+#include <zephyr/drivers/gpio/gpio_utils.h>
 #include "soc_gpio.h"
 #include "soc_miwu.h"
 

@@ -51,8 +51,8 @@ source "drivers/dai/Kconfig"
 
 source "drivers/pwm/Kconfig"
 
+source "drivers/input/Kconfig"
 source "drivers/pinmux/Kconfig"
-
 source "drivers/adc/Kconfig"
 
 source "drivers/dac/Kconfig"

@@ -8,11 +8,8 @@
 
 #include <soc.h>
 #include <zephyr/drivers/clock_control.h>
-#if defined(CONFIG_SOC_SERIES_NPCK3)
-#include <zephyr/dt-bindings/clock/npck_clock.h>
-#else /* NPCX7, NPCX9 and so on NPCX series */
 #include <zephyr/dt-bindings/clock/npcx_clock.h>
-#endif
+
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(clock_control_npcx, LOG_LEVEL_ERR);
 

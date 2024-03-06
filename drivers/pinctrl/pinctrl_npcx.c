@@ -64,11 +64,8 @@ static void npcx_periph_pinmux_configure(const struct npcx_periph *alt, bool is_
 		NPCX_DEVALT(scfg_base, alt->group) &= ~alt_mask;
 	}
 
-	/* NPCK3 series doesn't support lock functionality */
 	if (is_locked && npcx_periph_pinmux_has_lock(alt->group)) {
-#if !defined(CONFIG_SOC_SERIES_NPCK3)
 		NPCX_DEVALT_LK(scfg_base, alt->group) |= alt_mask;
-#endif
 	}
 }
 
@@ -142,25 +139,11 @@ static void npcx_psl_input_detection_configure(const pinctrl_soc_pin_t *pin)
 	}
 
 	/* Configure detection mode of PSL input pads */
-#if defined(CONFIG_SOC_SERIES_NPCK3)
-	if (pin->flags.psl_in_mode == NPCX_PSL_IN_MODE_EDGE) {
-		inst_glue->PSL_CTS3 |= NPCX_PSL_CTS_MODE_BIT(psl_in->port);
-	} else {
-		inst_glue->PSL_CTS3 &= ~NPCX_PSL_CTS_MODE_BIT(psl_in->port);
-	}
-
-	/* Clear event bits */
-	inst_glue->PSL_CTS |= NPCX_PSL_CTS_MODE_BIT(psl_in->port);
-	inst_glue->PSL_IN_POS |= NPCX_PSL_CTS_MODE_BIT(psl_in->port);
-	inst_glue->PSL_IN_NEG |= NPCX_PSL_CTS_MODE_BIT(psl_in->port);
-
-#else
 	if (pin->flags.psl_in_mode == NPCX_PSL_IN_MODE_EDGE) {
 		inst_glue->PSL_CTS |= NPCX_PSL_CTS_MODE_BIT(psl_in->port);
 	} else {
 		inst_glue->PSL_CTS &= ~NPCX_PSL_CTS_MODE_BIT(psl_in->port);
 	}
-#endif
 }
 
 static void npcx_device_control_configure(const pinctrl_soc_pin_t *pin)

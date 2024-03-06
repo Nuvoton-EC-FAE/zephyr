@@ -49,37 +49,12 @@ static inline void qspi_npcx_uma_cs_level(const struct device *dev, uint8_t sw_c
 {
 	struct fiu_reg *const inst = HAL_INSTANCE(dev);
 
-	/* Automatic block access support during a UMA trasaction in NPCK series */
-#if defined(CONFIG_SOC_SERIES_NPCK3)
-	if (level == 0) {
-		inst->FIU_MSR_IE_CFG |= BIT(NPCX_MSR_IE_CFG_UMA_BLOCK);
-	}
-#endif
-
 	/* Set chip select to high/low level */
 	if (level) {
 		inst->UMA_ECTS |= BIT(sw_cs);
 	} else {
 		inst->UMA_ECTS &= ~BIT(sw_cs);
 	}
-
-#if defined(CONFIG_SOC_SERIES_NPCK3)
-	if (level == 1) {
-		inst->FIU_MSR_IE_CFG &= ~BIT(NPCX_MSR_IE_CFG_UMA_BLOCK);
-	}
-#endif
-}
-
-static inline void npcx_uma_start(const struct device *dev, uint8_t code)
-{
-	struct fiu_reg *const inst = HAL_INSTANCE(dev);
-
-#if defined(CONFIG_SOC_SERIES_NPCK3)
-	code &= ~BIT(NPCX_UMA_CTS_DEV_NUM);
-	inst->UMA_CTS = (inst->UMA_CTS & BIT(NPCX_UMA_CTS_DEV_NUM)) | code;
-#else
-	inst->UMA_CTS = code;
-#endif
 }
 
 static inline void qspi_npcx_uma_write_byte(const struct device *dev, uint8_t data)
@@ -88,7 +63,7 @@ static inline void qspi_npcx_uma_write_byte(const struct device *dev, uint8_t da
 
 	/* Set data to UMA_CODE and trigger UMA */
 	inst->UMA_CODE = data;
-	npcx_uma_start(dev, UMA_CODE_CMD_WR_ONLY);
+	inst->UMA_CTS = UMA_CODE_CMD_WR_ONLY;
 	/* EXEC_DONE will be zero automatically if a UMA transaction is completed. */
 	while (IS_BIT_SET(inst->UMA_CTS, NPCX_UMA_CTS_EXEC_DONE)) {
 		continue;
@@ -100,7 +75,7 @@ static inline void qspi_npcx_uma_read_byte(const struct device *dev, uint8_t *da
 	struct fiu_reg *const inst = HAL_INSTANCE(dev);
 
 	/* Trigger UMA and Get data from DB0 later */
-	npcx_uma_start(dev, UMA_CODE_RD_BYTE(1));
+	inst->UMA_CTS = UMA_CODE_RD_BYTE(1);
 	while (IS_BIT_SET(inst->UMA_CTS, NPCX_UMA_CTS_EXEC_DONE)) {
 		continue;
 	}
@@ -114,23 +89,11 @@ static inline void qspi_npcx_config_uma_mode(const struct device *dev,
 {
 	struct fiu_reg *const inst = HAL_INSTANCE(dev);
 
-#if defined(CONFIG_SOC_SERIES_NPCK3)
-	if ((qspi_cfg->flags & NPCX_QSPI_SHD_FLASH_SL) != 0) {
-		inst->UMA_CTS |= BIT(NPCX_UMA_CTS_DEV_NUM);
-		inst->UMA_ECTS &= ~BIT(NPCX_UMA_ECTS_UMA_DEV_BKP);
-	} else if ((qspi_cfg->flags & NPCX_QSPI_PVT_FLASH_SL) != 0) {
-		inst->UMA_CTS &= ~BIT(NPCX_UMA_CTS_DEV_NUM);
-		inst->UMA_ECTS &= ~BIT(NPCX_UMA_ECTS_UMA_DEV_BKP);
-	} else if ((qspi_cfg->flags & NPCX_QSPI_BKP_FLASH_SL) != 0) {
-		inst->UMA_ECTS |= BIT(NPCX_UMA_ECTS_UMA_DEV_BKP);
-	}
-#else
 	if ((qspi_cfg->flags & NPCX_QSPI_SEC_FLASH_SL) != 0) {
 		inst->UMA_ECTS |= BIT(NPCX_UMA_ECTS_SEC_CS);
 	} else {
 		inst->UMA_ECTS &= ~BIT(NPCX_UMA_ECTS_SEC_CS);
 	}
-#endif /* CONFIG_SOC_SERIES_NPCK3 */
 }
 
 static inline void qspi_npcx_config_dra_4byte_mode(const struct device *dev,
@@ -153,16 +116,6 @@ static inline void qspi_npcx_config_dra_4byte_mode(const struct device *dev,
 #elif defined(CONFIG_FLASH_NPCX_FIU_DRA_V2)
 	if (qspi_cfg->enter_4ba != 0) {
 		SET_FIELD(inst->SPI_DEV, NPCX_SPI_DEV_NADDRB, NPCX_DEV_NUM_ADDR_4BYTE);
-	}
-#elif defined(CONFIG_FLASH_NPCX_FIU_DRA_EX_V1)
-	if (qspi_cfg->enter_4ba != 0) {
-		if ((qspi_cfg->flags & NPCX_QSPI_SHD_FLASH_SL) != 0) {
-			inst->FIU_4B_EN |= BIT(NPCX_MSR_FIU_4B_EN_SHD_4B);
-		} else if ((qspi_cfg->flags & NPCX_QSPI_PVT_FLASH_SL) != 0) {
-			inst->FIU_4B_EN |= BIT(NPCX_MSR_FIU_4B_EN_PVT_4B);
-		} else if ((qspi_cfg->flags & NPCX_QSPI_BKP_FLASH_SL) != 0) {
-			inst->FIU_4B_EN |= BIT(NPCX_MSR_FIU_4B_EN_BKP_4B);
-		}
 	}
 #endif
 #endif /* CONFIG_FLASH_NPCX_FIU_SUPP_DRA_4B_ADDR */

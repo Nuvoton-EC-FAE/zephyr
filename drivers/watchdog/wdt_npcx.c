@@ -343,10 +343,6 @@ static int wdt_npcx_init(const struct device *dev)
 	inst->WDCP = 0x05; /* Prescaler is 32 in Watchdog Timer */
 	inst->TWCP = 0x05; /* Prescaler is 32 in T0 Timer */
 
-#if defined(CONFIG_SOC_SERIES_NPCK3)
-	inst->T0CSR |= BIT(NPCX_T0CSR_T0EN); /* enable T0OUT */
-#endif
-
 	return 0;
 }
 

@@ -4,12 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/**
- * @file Header where utility code can be found for GPIO drivers
- */
 
-#ifndef ZEPHYR_DRIVERS_GPIO_GPIO_UTILS_H_
-#define ZEPHYR_DRIVERS_GPIO_GPIO_UTILS_H_
+#ifndef ZEPHYR_INCLUDE_DRIVERS_GPIO_GPIO_UTILS_H_
+#define ZEPHYR_INCLUDE_DRIVERS_GPIO_GPIO_UTILS_H_
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -23,11 +20,27 @@
 #define GPIO_PORT_PIN_MASK_FROM_NGPIOS(ngpios)			\
 	((gpio_port_pins_t)(((uint64_t)1 << (ngpios)) - 1U))
 
+/**
+ * @brief Makes a bitmask of allowed GPIOs from the @p "gpio-reserved-ranges"
+ *        and @p "ngpios" DT properties values
+ *
+ * @param node_id GPIO controller node identifier.
+ * @return the bitmask of allowed gpios
+ * @see GPIO_DT_PORT_PIN_MASK_NGPIOS_EXC()
+ */
 #define GPIO_PORT_PIN_MASK_FROM_DT_NODE(node_id)		\
-	GPIO_PORT_PIN_MASK_FROM_NGPIOS(DT_PROP(node_id, ngpios))
+	GPIO_DT_PORT_PIN_MASK_NGPIOS_EXC(node_id, DT_PROP(node_id, ngpios))
 
+/**
+ * @brief Make a bitmask of allowed GPIOs from a DT_DRV_COMPAT instance's GPIO
+ *        @p "gpio-reserved-ranges" and @p "ngpios" DT properties values
+ *
+ * @param inst DT_DRV_COMPAT instance number
+ * @return the bitmask of allowed gpios
+ * @see GPIO_DT_PORT_PIN_MASK_NGPIOS_EXC()
+ */
 #define GPIO_PORT_PIN_MASK_FROM_DT_INST(inst)			\
-	GPIO_PORT_PIN_MASK_FROM_NGPIOS(DT_INST_PROP(inst, ngpios))
+	GPIO_PORT_PIN_MASK_FROM_DT_NODE(DT_DRV_INST(inst))
 
 /**
  * @brief Generic function to insert or remove a callback from a callback list
@@ -51,6 +64,8 @@ static inline int gpio_manage_callback(sys_slist_t *callbacks,
 				return -EINVAL;
 			}
 		}
+	} else if (!set) {
+		return -EINVAL;
 	}
 
 	if (set) {
@@ -81,4 +96,4 @@ static inline void gpio_fire_callbacks(sys_slist_t *list,
 	}
 }
 
-#endif /* ZEPHYR_DRIVERS_GPIO_GPIO_UTILS_H_ */
+#endif /* ZEPHYR_INCLUDE_DRIVERS_GPIO_GPIO_UTILS_H_ */

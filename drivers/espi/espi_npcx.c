@@ -38,9 +38,9 @@ struct espi_npcx_config {
 struct espi_npcx_data {
 	sys_slist_t callbacks;
 	uint8_t plt_rst_asserted;
-	uint8_t espi_rst_asserted;
+	uint8_t espi_rst_level;
 	uint8_t sx_state;
-#if defined(CONFIG_ESPI_OOB_CHANNEL) && !defined(CONFIG_ESPI_OOB_CHANNEL_RX_ASYNC)
+#if defined(CONFIG_ESPI_OOB_CHANNEL)
 	struct k_sem oob_rx_lock;
 #endif
 #if defined(CONFIG_ESPI_FLASH_CHANNEL)
@@ -276,81 +276,61 @@ static void espi_bus_cfg_update_isr(const struct device *dev)
 				NPCX_ESPI_HOST_CH_EN(NPCX_ESPI_CH_VW))) {
 		espi_vw_send_bootload_done(dev);
 	}
+
+#if (defined(CONFIG_ESPI_FLASH_CHANNEL) && defined(CONFIG_ESPI_SAF))
+	/* If CONFIG_ESPI_SAF is set, set to auto or manual mode accroding
+	 * to configuration.
+	 */
+	if (IS_BIT_SET(inst->ESPICFG, NPCX_ESPICFG_FLCHANMODE)) {
+#if defined(CONFIG_ESPI_TAF_AUTO_MODE)
+		inst->FLASHCTL |= BIT(NPCX_FLASHCTL_SAF_AUTO_READ);
+#else
+		inst->FLASHCTL &= ~BIT(NPCX_FLASHCTL_SAF_AUTO_READ);
+#endif
+	}
+#endif
 }
 
 #if defined(CONFIG_ESPI_OOB_CHANNEL)
 static void espi_bus_oob_rx_isr(const struct device *dev)
 {
 	struct espi_npcx_data *const data = dev->data;
-#ifdef CONFIG_ESPI_OOB_CHANNEL_RX_ASYNC
-	struct espi_reg *const inst = HAL_INSTANCE(dev);
-	struct espi_event evt = { .evt_type = ESPI_BUS_EVENT_OOB_RECEIVED,
-				  .evt_details = 0,
-				  .evt_data = 0 };
 
-	/* Notify upper layer the length of OOB received package */
-	evt.evt_details = NPCX_OOB_RX_PACKAGE_LEN(inst->OOBRXBUF[0]);
-	espi_send_callbacks(&data->callbacks, dev, evt);
-#else
+	LOG_DBG("%s", __func__);
 	k_sem_give(&data->oob_rx_lock);
-#endif
 }
 #endif
 
 #if defined(CONFIG_ESPI_FLASH_CHANNEL)
-
-void espi_release_flash_np_free(const struct device *dev)
-{
-	struct espi_reg *const inst = HAL_INSTANCE(dev);
-	uint32_t tmp = inst->FLASHCTL;
-
-	/* release FLASH_NP_FREE */
-	tmp |= BIT(NPCX_FLASHCTL_FLASH_NP_FREE);
-	inst->FLASHCTL = tmp;
-}
-
 #if defined(CONFIG_ESPI_SAF)
 static struct espi_taf_pckt taf_pckt;
 
 static uint32_t espi_taf_parse(const struct device *dev)
 {
 	struct espi_reg *const inst = HAL_INSTANCE(dev);
-	uint32_t taf_hdr, taf_addr;
+	struct npcx_taf_head taf_head;
+	uint32_t taf_addr;
 	uint8_t i, roundsize;
 
 	/* Get type, length and tag from RX buffer */
-	if (IS_ENABLED(CONFIG_ESPI_TAF_DIRECT_ACCESS)) {
-		taf_hdr = inst->FLASHRXBUF[0];
-	} else {
-		taf_hdr = inst->FLASHRXRDHEAD;
-	}
+	memcpy(&taf_head, (void *)&inst->FLASHRXBUF[0], sizeof(taf_head));
+	taf_pckt.type = taf_head.type;
+	taf_pckt.len = (((uint16_t)taf_head.tag_hlen & 0xF) << 8) | taf_head.llen;
+	taf_pckt.tag = taf_head.tag_hlen >> 4;
 
-	taf_hdr = sys_cpu_to_be32(taf_hdr);
-	taf_pckt.type = MSB1(taf_hdr);
-	taf_pckt.len = ((uint16_t)(taf_hdr)) & 0xFFF;
-	taf_pckt.tag = MSN(MSB2(taf_hdr));
-
-	if ((taf_pckt.len == 0) && ((taf_pckt.type & 0xF) == ESPI_FLASH_TAF_REQ_READ)) {
-		taf_pckt.len = _4KB_;
+	if ((taf_pckt.len == 0) && ((taf_pckt.type & 0xF) == NPCX_ESPI_TAF_REQ_READ)) {
+		taf_pckt.len = KB(4);
 	}
 
 	/* Get address from RX buffer */
-	if (IS_ENABLED(CONFIG_ESPI_TAF_DIRECT_ACCESS)) {
-		taf_addr = inst->FLASHRXBUF[1];
-	} else {
-		taf_addr = inst->FLASHRXRDHEAD;
-	}
+	taf_addr = inst->FLASHRXBUF[1];
 	taf_pckt.addr = sys_cpu_to_be32(taf_addr);
 
 	/* Get written data if eSPI TAF write */
-	if ((taf_pckt.type & 0xF) == ESPI_FLASH_TAF_REQ_WRITE) {
+	if ((taf_pckt.type & 0xF) == NPCX_ESPI_TAF_REQ_WRITE) {
 		roundsize = DIV_ROUND_UP(taf_pckt.len, sizeof(uint32_t));
 		for (i = 0; i < roundsize; i++) {
-			if (IS_ENABLED(CONFIG_ESPI_TAF_DIRECT_ACCESS)) {
-				taf_pckt.src[i] = inst->FLASHRXBUF[2 + i];
-			} else {
-				taf_pckt.src[i] = inst->FLASHRXRDHEAD;
-			}
+			taf_pckt.src[i] = inst->FLASHRXBUF[2 + i];
 		}
 	}
 
@@ -368,14 +348,14 @@ static void espi_bus_flash_rx_isr(const struct device *dev)
 		k_sem_give(&data->flash_rx_lock);
 	} else { /* Target Attached Flash Access */
 #if defined(CONFIG_ESPI_SAF)
-		struct espi_event evt
-			= { .evt_type = ESPI_BUS_SAF_NOTIFICATION,
-			    .evt_details = ESPI_CHANNEL_FLASH,
-			    .evt_data = espi_taf_parse(dev),
-			  };
+		struct espi_event evt = {
+			.evt_type = ESPI_BUS_SAF_NOTIFICATION,
+			.evt_details = ESPI_CHANNEL_FLASH,
+			.evt_data = espi_taf_parse(dev),
+		};
 		espi_send_callbacks(&data->callbacks, dev, evt);
 #else
-		LOG_DBG("ESPI TAF not supported");
+		LOG_WRN("ESPI TAF not supported");
 #endif
 	}
 }
@@ -396,7 +376,7 @@ static void espi_bus_completion_sent_isr(const struct device *dev)
 
 	/* In auto mode, release FLASH_NP_FREE here to get next SAF request.*/
 	if (IS_BIT_SET(inst->FLASHCTL, NPCX_FLASHCTL_SAF_AUTO_READ)) {
-		espi_release_flash_np_free(dev);
+		inst->FLASHCTL |= BIT(NPCX_FLASHCTL_FLASH_NP_FREE);
 	}
 }
 #endif
@@ -631,11 +611,11 @@ static void espi_vw_espi_rst_isr(const struct device *dev, struct npcx_wui *wui)
 	struct espi_npcx_data *const data = dev->data;
 	struct espi_event evt = { ESPI_BUS_RESET, 0, 0 };
 
-	data->espi_rst_asserted = !IS_BIT_SET(inst->ESPISTS,
-						NPCX_ESPISTS_ESPIRST_LVL);
-	LOG_DBG("eSPI RST asserted is %d!", data->espi_rst_asserted);
+	data->espi_rst_level = IS_BIT_SET(inst->ESPISTS,
+					  NPCX_ESPISTS_ESPIRST_LVL);
+	LOG_DBG("eSPI RST level is %d!", data->espi_rst_level);
 
-	evt.evt_data = data->espi_rst_asserted;
+	evt.evt_data = data->espi_rst_level;
 	espi_send_callbacks(&data->callbacks, dev, evt);
 }
 
@@ -907,7 +887,7 @@ static int espi_npcx_send_oob(const struct device *dev,
 
 	/*
 	 * Notify host a new OOB packet is ready. Please don't write OOB_FREE
-	 * to 1 at the same time in case clear it unexpectedly.
+	 * to 1 at the same tiem in case clear it unexpectedly.
 	 */
 	oob_data = inst->OOBCTL & ~(BIT(NPCX_OOBCTL_OOB_FREE));
 	oob_data |= BIT(NPCX_OOBCTL_OOB_AVAIL);
@@ -924,9 +904,10 @@ static int espi_npcx_receive_oob(const struct device *dev,
 				struct espi_oob_packet *pckt)
 {
 	struct espi_reg *const inst = HAL_INSTANCE(dev);
+	struct espi_npcx_data *const data = dev->data;
 	uint8_t *oob_buf = pckt->buf;
 	uint32_t oob_data;
-	int idx_rx_buf, sz_oob_rx;
+	int idx_rx_buf, sz_oob_rx, ret;
 
 	/* Check eSPI bus status first */
 	if (IS_BIT_SET(inst->ESPISTS, NPCX_ESPISTS_BERR)) {
@@ -934,15 +915,16 @@ static int espi_npcx_receive_oob(const struct device *dev,
 		return -EIO;
 	}
 
-#ifndef CONFIG_ESPI_OOB_CHANNEL_RX_ASYNC
-	struct espi_npcx_data *const data = dev->data;
+	/* Notify host that OOB received buffer is free now. */
+	inst->OOBCTL |= BIT(NPCX_OOBCTL_OOB_FREE);
 
 	/* Wait until get oob package or timeout */
-	if (k_sem_take(&data->oob_rx_lock, K_MSEC(ESPI_OOB_MAX_TIMEOUT)) == -EAGAIN) {
+	ret = k_sem_take(&data->oob_rx_lock, K_MSEC(ESPI_OOB_MAX_TIMEOUT));
+	if (ret == -EAGAIN) {
 		LOG_ERR("%s: Timeout", __func__);
 		return -ETIMEDOUT;
 	}
-#endif
+
 	/*
 	 * PUT_OOB header (first 4 bytes) in npcx 32-bits rx buffer
 	 *
@@ -983,9 +965,6 @@ static int espi_npcx_receive_oob(const struct device *dev,
 		for (i = 0; i < sz_oob_rx % 4; i++)
 			*(oob_buf++) = (oob_data >> (8 * i)) & 0xFF;
 	}
-
-	/* Notify host that OOB received buffer is free now. */
-	inst->OOBCTL |= BIT(NPCX_OOBCTL_OOB_FREE);
 	return 0;
 }
 #endif
@@ -1337,7 +1316,7 @@ static int espi_npcx_init(const struct device *dev)
 		inst->ESPIWE |= BIT(espi_bus_isr_tbl[i].wake_en_bit);
 	}
 
-#if defined(CONFIG_ESPI_OOB_CHANNEL) && !defined(CONFIG_ESPI_OOB_CHANNEL_RX_ASYNC)
+#if defined(CONFIG_ESPI_OOB_CHANNEL)
 	k_sem_init(&data->oob_rx_lock, 0, 1);
 #endif
 

@@ -5,7 +5,9 @@
 
 config ESPI_NPCX
 	bool "Nuvoton NPCX embedded controller (EC) ESPI driver"
+	default y
 	depends on SOC_FAMILY_NPCX
+	depends on DT_HAS_NUVOTON_NPCX_ESPI_ENABLED
 	help
 	  This option enables the Intel Enhanced Serial Peripheral Interface
 	  (eSPI) for NPCX family of processors.
@@ -58,24 +60,24 @@ config ESPI_NPCX_PERIPHERAL_DEBUG_PORT_80_RING_BUF_SIZE
 
 config ESPI_TAF_NPCX
 	bool "Nuvoton NPCX embedded controller (EC) ESPI TAF driver"
-	depends on SOC_SERIES_NPCX4 || SOC_SERIES_NPCK3
+	depends on SOC_SERIES_NPCX4
 	help
 	  This option enables the Intel Enhanced Serial Peripheral Interface
 	  Target Attached Flash (eSPI TAF) for NPCX4 family of processors.
 
 choice ESPI_TAF_ACCESS_MODE_CHOICE
-	prompt "set TX/RX mode for eSPI TAF"
-	default ESPI_TAF_DIRECT_ACCESS
+	prompt "eSPI TAF Read Access Mode"
+	default ESPI_TAF_AUTO_MODE
 
-config ESPI_TAF_DIRECT_ACCESS
-	bool "eSPI TAF access buffer directly"
+config ESPI_TAF_AUTO_MODE
+	bool "eSPI TAF Automatic Mode"
 	help
-	  This is the setting to use direct mode for eSPI TAF.
+	  This is the setting to use auto mode for eSPI TAF read.
 
-config ESPI_TAF_INDIRECT_ACCESS
-	bool "eSPI TAF access buffer indirectly"
+config ESPI_TAF_MANUAL_MODE
+	bool "eSPI TAF Manual Mode"
 	help
-	  This is the setting to use indirect mode for eSPI TAF.
+	  This is the setting to use manual mode for eSPI TAF read.
 
 endchoice
 

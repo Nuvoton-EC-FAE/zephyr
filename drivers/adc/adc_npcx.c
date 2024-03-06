@@ -22,19 +22,11 @@
 #include <zephyr/irq.h>
 LOG_MODULE_REGISTER(adc_npcx, CONFIG_ADC_LOG_LEVEL);
 
-#if defined(CONFIG_SOC_SERIES_NPCK3)
-/* ADC speed/delay values during initialization */
-#define ADC_REGULAR_DLY_VAL	0x02
-#define ADC_REGULAR_ADCCNF2_VAL	0x8901
-#define ADC_REGULAR_GENDLY_VAL	0x0100
-#define ADC_REGULAR_MEAST_VAL	0x0405
-#else
 /* ADC speed/delay values during initialization */
 #define ADC_REGULAR_DLY_VAL	0x03
 #define ADC_REGULAR_ADCCNF2_VAL	0x8B07
 #define ADC_REGULAR_GENDLY_VAL	0x0100
 #define ADC_REGULAR_MEAST_VAL	0x0001
-#endif
 
 /* ADC targeted operating frequency (2MHz) */
 #define NPCX_ADC_CLK 2000000
