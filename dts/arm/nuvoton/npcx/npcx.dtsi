@@ -369,8 +369,6 @@
 			clocks = <&pcc NPCX_CLOCK_BUS_APB3 NPCX_PWDWN_CTL6 7>;
 			/* WUI maps for eSPI signals */
 			espi-rst-wui = <&wui_espi_rst>;
-			rx-plsize = <64>;
-			tx-plsize = <16>;
 
 			#address-cells = <1>;
 			#size-cells = <0>;

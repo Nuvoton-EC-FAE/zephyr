@@ -16,9 +16,6 @@
 
 /* Supported flash interfaces for UMA transactions */
 #define NPCX_QSPI_SEC_FLASH_SL	BIT(4)
-#define NPCX_QSPI_PVT_FLASH_SL	BIT(5)
-#define NPCX_QSPI_SHD_FLASH_SL	BIT(6)
-#define NPCX_QSPI_BKP_FLASH_SL	BIT(7)
 
 /* Supported read mode for Direct Read Access */
 #define NPCX_RD_MODE_NORMAL	0

@@ -30,13 +30,3 @@ properties:
 
         For example the WUI mapping on NPCX7 would be
            espi-rst-wui = <&wui_cr_sin1>;
-
-  rx-plsize:
-    type: int
-    required: true
-    description: The amount of flash receive buffer register.
-
-  tx-plsize:
-    type: int
-    required: true
-    description: The amount of flash transmit buffer register.

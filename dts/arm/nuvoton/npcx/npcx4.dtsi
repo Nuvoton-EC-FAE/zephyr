@@ -318,7 +318,6 @@
 	};
 
 	soc-id {
-		family-id = <0x23>;
 		chip-id = <0x0a>;
 		revision-reg = <0x0000FFFC 4>;
 	};
