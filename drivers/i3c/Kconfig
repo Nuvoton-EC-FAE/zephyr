@@ -100,5 +100,7 @@ comment "Device Drivers"
 
 rsource "Kconfig.nxp"
 rsource "Kconfig.cdns"
+rsource "Kconfig.npcx"
+
 
 endif # I3C
