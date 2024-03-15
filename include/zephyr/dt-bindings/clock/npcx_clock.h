@@ -20,6 +20,7 @@
 #define NPCX_CLOCK_BUS_FMCLK       10
 #define NPCX_CLOCK_BUS_FIU0        NPCX_CLOCK_BUS_FIU
 #define NPCX_CLOCK_BUS_FIU1        11
+#define NPCX_CLOCK_BUS_MCLKD       12
 
 /* clock enable/disable references */
 #define NPCX_PWDWN_CTL1            0

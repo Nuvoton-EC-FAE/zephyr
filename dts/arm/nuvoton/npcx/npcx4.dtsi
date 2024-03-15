@@ -14,6 +14,9 @@
 #include "npcx4/npcx4-espi-vws-map.dtsi"
 /* npcx4 series low-voltage io controls mapping table */
 #include "npcx4/npcx4-lvol-ctrl-map.dtsi"
+/* npcx4 series reset mapping table*/
+#include "zephyr/dt-bindings/reset/npcx4_reset.h"
+
 
 /* Device tree declarations of npcx soc family */
 #include "npcx.dtsi"
@@ -316,6 +319,30 @@
 				reg = <0x4000a000 0x2000>;
 				status = "disabled";
 			};
+		};
+		
+		i3c0: i3c@400f0000 {
+			compatible = "nuvoton,npcx-i3c";
+			reg = <0x400f0000 0x2000>;
+			interrupts = <29 3>;
+
+			/* Reset controller */
+			resets = <&rst NPCX_RESET_I3C_1>;
+
+			/* APB4 is time-out reference clk */
+			clock-names = "mclkd", "apb4";
+			clocks = <&pcc NPCX_CLOCK_BUS_MCLKD NPCX_PWDWN_CTL8 0>,
+				 <&pcc NPCX_CLOCK_BUS_APB4 0 0>;
+			status = "disabled";
+			#address-cells = <3>;
+			#size-cells = <0>;
+		};
+
+		rst: reset-controller@400c3100 {
+			compatible = "nuvoton,npcx-rst";
+			reg = <0x400c3100 0x14>;
+			#reset-cells = <1>;
+			status = "disabled";
 		};
 	};
 

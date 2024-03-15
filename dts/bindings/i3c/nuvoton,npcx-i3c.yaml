@@ -1,0 +1,67 @@
+# Copyright (c) 2024 Nuvoton Technology Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+    Nuvoton I3C controller
+
+    Representation:
+
+    /* If CONFIG_I3C_NPCX is enabled, the suggestion clock configuration as below */
+    &pcc {
+      clock-frequency = <DT_FREQ_M(90)>; /* OFMCLK runs at 90MHz */
+      core-prescaler = <3>; /* CORE_CLK runs at 30MHz */
+      apb1-prescaler = <6>; /* APB1_CLK runs at 15MHz */
+      apb2-prescaler = <6>; /* APB2_CLK runs at 15MHz */
+      apb3-prescaler = <6>; /* APB3_CLK runs at 15MHz */
+      apb4-prescaler = <3>; /* APB4_CLK runs at 30MHz */
+    };
+
+    &i3c0 {
+      status = "okay";
+      pinctrl-0 = <&i3c1_sda_scl_gpe3_e4>;
+      pinctrl-names = "default";
+
+      i3c-scl-hz = <7500000>;
+      i3c-od-scl-hz = <1500000>;
+    };
+
+compatible: "nuvoton,npcx-i3c"
+
+include: [i3c-controller.yaml, pinctrl-device.yaml, reset-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  resets:
+    required: true
+
+  i3c-od-scl-hz:
+    type: int
+    description: |
+      Open Drain Frequency for the I3C controller. When undefined, use
+      the controller default or as specified by the I3C specification.
+
+  clk-divider:
+    type: int
+    description: Main clock divider for I3C
+
+  clk-divider-tc:
+    type: int
+    description: TC clock divider for I3C
+
+  clk-divider-slow:
+    type: int
+    description: Slow clock divider for I3C
+
+  disable-open-drain-high-pp:
+    type: boolean
+    description: |
+      If false, open drain high time is 1 PPBAUD count,
+      which is short high and long low.
+      If true, open drain high time is same as ODBAUD
+      so that open drain clock is 50% duty cycle.
+      Default is false.

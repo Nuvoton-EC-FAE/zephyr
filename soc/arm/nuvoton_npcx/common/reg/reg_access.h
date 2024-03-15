@@ -35,4 +35,6 @@
 	_GET_FIELD_SZ_(FIELD_SIZE(field))
 #define _GET_FIELD_SZ_(f_ops) f_ops
 
+#define GET_FIELD_MASK(field) \
+	 (((1 << GET_FIELD_SZ(field)) - 1) << GET_FIELD_POS(field))
 #endif /* _NUVOTON_NPCX_REG_ACCESS_H */

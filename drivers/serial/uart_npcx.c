@@ -90,6 +90,9 @@ static int uart_set_npcx_baud_rate(struct uart_reg *const inst, int baud_rate, i
 		} else if (src_clk == 20000000) {
 			inst->UPSR = 0x08;
 			inst->UBAUD = 0x0a;
+		} else if (src_clk == 30000000) {
+			inst->UPSR = 0x10;
+			inst->UBAUD = 0x0a;
 		} else {
 			return -EINVAL;
 		}
