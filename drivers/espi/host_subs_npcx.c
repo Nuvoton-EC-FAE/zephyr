@@ -1003,10 +1003,16 @@ void npcx_host_init_subs_host_domain(void)
 
 	if (IS_ENABLED(CONFIG_ESPI_PERIPHERAL_HOST_IO)) {
 		/*
-		 * Select ACPI bank which LDN are 0x11 (PM Channel 1) and enable
-		 * module by setting bit 0 in its Control (index is 0x30) reg.
-		 */
+		* Select ACPI bank which LDN are 0x11 (PM Channel 1) and enable
+		* module by setting bit 0 in its Control (index is 0x30) reg.
+		*/
 		host_c2h_write_io_cfg_reg(EC_CFG_IDX_LDN, EC_CFG_LDN_ACPI);
+		/* Configure IO address of CMD portt (default: 0x662) */
+		host_c2h_write_io_cfg_reg(EC_CFG_IDX_CMD_IO_ADDR_H, (0x662 >> 8) & 0xff);
+		host_c2h_write_io_cfg_reg(EC_CFG_IDX_CMD_IO_ADDR_L, 0x662 & 0xff);
+		/* Configure IO address of Data portt (default: 0x666) */
+		host_c2h_write_io_cfg_reg(EC_CFG_IDX_DATA_IO_ADDR_H, ((0x66) >> 8) & 0xff);
+		host_c2h_write_io_cfg_reg(EC_CFG_IDX_DATA_IO_ADDR_L, (0x666) & 0xff);
 		host_c2h_write_io_cfg_reg(EC_CFG_IDX_CTRL, 0x01);
 	}
 
