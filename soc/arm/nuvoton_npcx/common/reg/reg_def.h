@@ -217,16 +217,19 @@ struct scfg_reg {
 	volatile uint8_t STRPST;
 	/* 0x002: Reset Control and Status */
 	volatile uint8_t RSTCTL;
-	volatile uint8_t reserved1[3];
+	volatile uint8_t reserved1;
+	/* 0x004: Device Control 3*/
+	volatile uint8_t DEV_CTL3;
+	volatile uint8_t reserved2;
 	/* 0x006: Device Control 4 */
 	volatile uint8_t DEV_CTL4;
-	volatile uint8_t reserved2[9];
+	volatile uint8_t reserved3[9];
 	/* 0x010 - 1F: Device Alternate Function 0 - F */
 	volatile uint8_t DEVALT0[16];
-	volatile uint8_t reserved3[6];
+	volatile uint8_t reserved4[6];
 	/* 0x026: Low-Voltage GPIO Pins Control 5 */
 	volatile uint8_t LV_GPIO_CTL5[1];
-	volatile uint8_t reserved4;
+	volatile uint8_t reserved5;
 	/* 0x028: Pull-Up/Pull-Down Enable 0 */
 	volatile uint8_t PUPD_EN0;
 	/* 0x029: Pull-Up/Pull-Down Enable 1 */
@@ -262,6 +265,12 @@ struct scfg_reg {
 #define NPCX_RSTCTL_VCC1_RST_SCRATCH          3
 #define NPCX_RSTCTL_LRESET_PLTRST_MODE        5
 #define NPCX_RSTCTL_HIPRST_MODE               6
+#define NPCX_DEV_CTL3_RNGINT_MD               1
+#define NPCX_DEV_CTL3_FVCC1_PURST_EN          2
+#define NPCX_DEV_CTL3_I3C1_MS                 3
+#define NPCX_DEV_CTL3_I3C2_MS                 4
+#define NPCX_DEV_CTL3_I3C3_MS                 5
+#define NPCX_DEV_CTL3_SIO_CLK_SEL             FIELD(6, 2)
 #define NPCX_DEV_CTL4_F_SPI_SLLK              2
 #define NPCX_DEV_CTL4_SPI_SP_SEL              4
 #define NPCX_DEV_CTL4_WP_IF                   5
@@ -278,6 +287,14 @@ enum npcx_hif_type {
 	NPCX_HIF_TYPE_NONE,
 	NPCX_HIF_TYPE_LPC,
 	NPCX_HIF_TYPE_ESPI_SHI,
+};
+
+/* Supported VOSCCLK frequency for SIO_CLK_SEL FILED in DEV_CTL3 register. */
+enum npcx_voscclk_type {
+	NPCX_VOSCCLK_96MHz,
+	NPCX_VOSCCLK_100MHz,
+	NPCX_VOSCCLK_120MHz,
+	NPCX_VOSCCLK_90MHz,
 };
 
 /*
@@ -1739,7 +1756,60 @@ struct i3c_reg {
 	volatile uint32_t MCONFIG;
 	/* 0x004: Target Configuration */
 	volatile uint32_t CONFIG;
-	volatile uint32_t reserved1[31];
+	/* 0x008: Target Status */
+	volatile uint32_t STATUS;
+	/* 0x00C: Target Control  */
+	volatile uint32_t CTRL;
+	/* 0x010: Target Interrupt Enable Set  */
+	volatile uint32_t INTSET;
+	/* 0x014: Target Interrupt Enable Clear */
+	volatile uint32_t INTCLR;
+	/* 0x018: Target Interrupt Masked */
+	volatile uint32_t INTMASKED;
+	/* 0x01C: Target Error and Warning */
+	volatile uint32_t ERRWARN;
+	/* 0x020: Target DMA Control */
+	volatile uint32_t DMACTRL;
+	/* 0x024-0x02B: reserved */
+	volatile uint32_t reserved0[2];
+	/* 0x02C: Target Data Control */
+	volatile uint32_t DATACTRL;
+	/* 0x030: Target Write Byte Data */
+	volatile uint32_t WDATAB;
+	/* 0x034: Target Write Byte Data as End */
+	volatile uint32_t WDATABE;
+	/* 0x038: Target Write Half-Word Data */
+	volatile uint32_t WDATAH;
+	/* 0x03C: Target Write Half-Word Data as End */
+	volatile uint32_t WDATAHE;
+	/* 0x040: Target Read Byte Data */
+	volatile uint32_t RDATAB;
+	/* 0x044: reserved */
+	volatile uint32_t reserved1;
+	/* 0x048: Target Read Half-Word Data */
+	volatile uint32_t RDATAH;
+    /* 0x04C-0x05B: reserved */
+	volatile uint32_t reserved2[4];
+	/* 0x05C: Target Capabilities 2 */
+	volatile uint32_t CCAPABILITIES2;
+	/* 0x060: Target Capabilities */
+	volatile uint32_t CCAPABILITIES;
+	/* 0x064: Target Dynamic Address */
+	volatile uint32_t DYNADDR;
+	/* 0x068: Target Maximum Limits */
+	volatile uint32_t MAXLIMITS;
+	/* 0x06C: Target Part Number */
+	volatile uint32_t PARTNO;
+	/* 0x070: Target ID Extension */
+	volatile uint32_t IDEXT;
+	/* 0x074: Target Vendor ID */
+	volatile uint32_t VENDORID;
+	/* 0x078: Target Timing Control Clock */
+	volatile uint32_t TCCLOCK;
+	/* 0x07C: Target Matching Address Index */
+	volatile uint32_t MSGLAST;
+	/* 0x080: reserved */
+	volatile uint32_t reserved3;
 	/* 0x084: Controller Control  */
 	volatile uint32_t MCTRL;
 	/* 0x088: Controller Status */
@@ -1756,7 +1826,8 @@ struct i3c_reg {
 	volatile uint32_t MERRWARN;
 	/* 0x0A0: Controller DMA Control */
 	volatile uint32_t MDMACTRL;
-	volatile uint32_t reserved2[2];
+    /* 0x0A0-0x0AB: reserved */
+	volatile uint32_t reserved4[2];
 	/* 0x0AC: Controller Data Control */
 	volatile uint32_t MDATACTRL;
 	/* 0x0B0: Controller Write Byte Data */
@@ -1769,21 +1840,59 @@ struct i3c_reg {
 	volatile uint32_t MWDATAHE;
 	/* 0x0C0: Controller Read Byte Data */
 	volatile uint32_t MRDATAB;
-	volatile uint32_t reserved3;
+    /* 0x0C4: reserved */
+	volatile uint32_t reserved5;
 	/* 0x0C8: Controller Read Half-Word Data */
 	volatile uint32_t MRDATAH;
-	volatile uint32_t reserved4[3];
+    /* 0x0CC-0x0D7: reserved */
+	volatile uint32_t reserved6[3];
 	/* 0x0D8: Start or Continue DDR Message */
 	volatile uint32_t MWMSG_DDR;
 	/* 0x0DC: Read DDR Message Data */
 	volatile uint32_t MRMSG_DDR;
-	volatile uint32_t reserved5;
+    /* 0x0E0: reserved */
+	volatile uint32_t reserved7;
 	/* 0x0E4: Controller Dynamic Address */
 	volatile uint32_t MDYNADDR;
+    /* 0x0E8-0x0FF reserved */
+	volatile uint32_t reserved8[6];
+	/* 0x100: Target Reset Recovery Time */
+	volatile uint32_t RSTACTTIME;
+	/* 0x104: reserved */
+	volatile uint32_t reserved9;
+	/* 0x108: Target HDR Command Byte */
+	volatile uint32_t HDRCMD;
+	/* 0x10C-0x113: reserved */
+	volatile uint32_t reserved10[2];
+	/* 0x114: Target Group Definition */
+	volatile uint32_t GROUPDEF;
+	/* 0x118: reserved */
+	volatile uint32_t reserved11;
+	/* 0x11C: Target Map Control 0 */
+	volatile uint32_t MAPCTRL0;
+	/* 0x120: Target Map Control 1 */
+	volatile uint32_t MAPCTRL1;
+	/* 0x124: Target Map Control 2 */
+	volatile uint32_t MAPCTRL2;
+	/* 0x128: Target Map Control 3 */
+	volatile uint32_t MAPCTRL3;
+	/* 0x12C: Target Map Control 4 */
+	volatile uint32_t MAPCTRL4;
+	/* 0x130: Target Map Control 5 */
+	volatile uint32_t MAPCTRL5;
+	/* 0x134: Target Map Control 6 */
+	volatile uint32_t MAPCTRL6;
+	/* 0x138: Target Map Control 7 */
+	volatile uint32_t MAPCTRL7;
+	/* 0x13C: Target Map Control 8 */
+	volatile uint32_t MAPCTRL8;
+	/* 0x140: Target Extended IBI Data 1 */
+	volatile uint32_t IBIEXT1;
+	/* 0x144: Target Extended IBI Data 2 */
+	volatile uint32_t IBIEXT2;
 };
 
 /* I3C register fields */
-#define NPCX_I3C_CONFIG_BAMATCH    FIELD(16, 7)
 #define NPCX_I3C_MCONFIG_CTRENA    FIELD(0, 2)
 #define NPCX_I3C_MCONFIG_DISTO     3
 #define NPCX_I3C_MCONFIG_HKEEP     FIELD(4, 2) /* Must be '11' */
@@ -1904,6 +2013,298 @@ struct swrst_reg {
 	volatile uint32_t SWRST_CTL[4];
 };
 
+/* Configuration Register (CONFIG) */
+#define NPCX_I3C_CONFIG_TGTENA      0
+#define NPCX_I3C_CONFIG_MATCHSS     2
+#define NPCX_I3C_CONFIG_S0IGNORE    3
+#define NPCX_I3C_CONFIG_IDRAND      8
+#define NPCX_I3C_CONFIG_OFFLINE     9
+#define NPCX_I3C_CONFIG_HDRCMD      FIELD(10, 2)
+#define NPCX_I3C_CONFIG_BAMATCH     FIELD(16, 7)
+#define NPCX_I3C_CONFIG_SADDR       FIELD(25, 7)
+
+/* Status Register (STATUS) */
+#define NPCX_I3C_STATUS_STNOTSTOP   0
+#define NPCX_I3C_STATUS_STMSG       1
+#define NPCX_I3C_STATUS_STCCCH      2
+#define NPCX_I3C_STATUS_STREQRD     3
+#define NPCX_I3C_STATUS_STREQWR     4
+#define NPCX_I3C_STATUS_STDAA       5
+#define NPCX_I3C_STATUS_STHDR       6
+#define NPCX_I3C_STATUS_START       8
+#define NPCX_I3C_STATUS_MATCHED     9
+#define NPCX_I3C_STATUS_STOP        10
+#define NPCX_I3C_STATUS_RXPEND      11
+#define NPCX_I3C_STATUS_TXNOTFULL   12
+#define NPCX_I3C_STATUS_DACHG       13
+#define NPCX_I3C_STATUS_CCC         14
+#define NPCX_I3C_STATUS_ERRWARN     15
+#define NPCX_I3C_STATUS_HDRMATCH    16
+#define NPCX_I3C_STATUS_CHANDLED    17
+#define NPCX_I3C_STATUS_EVENT       18
+#define NPCX_I3C_STATUS_TGTRST      19
+#define NPCX_I3C_STATUS_EVDET       FIELD(20, 2)
+#define NPCX_I3C_STATUS_IBIDIS      24
+#define NPCX_I3C_STATUS_MRDIS       25
+#define NPCX_I3C_STATUS_HJDIS       27
+#define NPCX_I3C_STATUS_ACTSTATE    FIELD(28, 2)
+#define NPCX_I3C_STATUS_TIMECTRL    FIELD(30, 2)
+
+/* I3C Control Register (CTRL) */
+#define NPCX_I3C_CTRL_EVENT         FIELD(0, 2)
+#define NPCX_I3C_CTRL_EXTDATA       3
+#define NPCX_I3C_CTRL_MAPIDX        FIELD(4, 4)
+#define NPCX_I3C_CTRL_IBIDATA       FIELD(8, 8)
+#define NPCX_I3C_CTRL_PENDINT       FIELD(16, 4)
+#define NPCX_I3C_CTRL_ACTSTATE      FIELD(20, 2)
+#define NPCX_I3C_CTRL_VENDINFO      FIELD(24, 8)
+
+/* Interrupt Enable Set Register (INTSET) */
+#define NPCX_I3C_INTSET_START       8
+#define NPCX_I3C_INTSET_MATCHED     9
+#define NPCX_I3C_INTSET_STOP        10
+#define NPCX_I3C_INTSET_RXPEND      11
+#define NPCX_I3C_INTSET_TXNOTFULL   12
+#define NPCX_I3C_INTSET_DACHG       13
+#define NPCX_I3C_INTSET_CCC         14
+#define NPCX_I3C_INTSET_ERRWARN     15
+#define NPCX_I3C_INTSET_HDRMATCH    16
+#define NPCX_I3C_INTSET_CHANDLED    17
+#define NPCX_I3C_INTSET_EVENT       18
+#define NPCX_I3C_INTSET_TGTRST      19
+
+/* Interrupt Enable Clear Register (INTCLR) */
+#define NPCX_I3C_INTCLR_START       8
+#define NPCX_I3C_INTCLR_MATCHED     9
+#define NPCX_I3C_INTCLR_STOP        10
+#define NPCX_I3C_INTCLR_RXPEND      11
+#define NPCX_I3C_INTCLR_TXNOTFULL   12
+#define NPCX_I3C_INTCLR_DACHG       13
+#define NPCX_I3C_INTCLR_CCC         14
+#define NPCX_I3C_INTCLR_ERRWARN     15
+#define NPCX_I3C_INTCLR_HDRMATCH    16
+#define NPCX_I3C_INTCLR_CHANDLED    17
+#define NPCX_I3C_INTCLR_EVENT       18
+#define NPCX_I3C_INTCLR_TGTRST      19
+
+/* Interrupt Masked Register (INTMASKED) */
+#define NPCX_I3C_INTMASKED_START       8
+#define NPCX_I3C_INTMASKED_MATCHED     9
+#define NPCX_I3C_INTMASKED_STOP        10
+#define NPCX_I3C_INTMASKED_RXPEND      11
+#define NPCX_I3C_INTMASKED_TXNOTFULL   12
+#define NPCX_I3C_INTMASKED_DACHG       13
+#define NPCX_I3C_INTMASKED_CCC         14
+#define NPCX_I3C_INTMASKED_ERRWARN     15
+#define NPCX_I3C_INTMASKED_HDRMATCH    16
+#define NPCX_I3C_INTMASKED_CHANDLED    17
+#define NPCX_I3C_INTMASKED_EVENT       18
+#define NPCX_I3C_INTMASKED_TGTRST      19
+
+/* Error and Warning Register (ERRWARN) */
+#define NPCX_I3C_ERRWARN_ORUN       0
+#define NPCX_I3C_ERRWARN_URUN       1
+#define NPCX_I3C_ERRWARN_URUNNACK   2
+#define NPCX_I3C_ERRWARN_TERM       3
+#define NPCX_I3C_ERRWARN_INVSTART   4
+#define NPCX_I3C_ERRWARN_SPAR       8
+#define NPCX_I3C_ERRWARN_HPAR       9
+#define NPCX_I3C_ERRWARN_HCRC       10
+#define NPCX_I3C_ERRWARN_S0S1       11
+#define NPCX_I3C_ERRWARN_OREAD      16
+#define NPCX_I3C_ERRWARN_OWRITE     17
+
+/* DMA Control Register (DMACTRL) */
+#define NPCX_I3C_DMACTRL_DMAFB      FIELD(0, 2)
+#define NPCX_I3C_DMACTRL_DMATB      FIELD(2, 2)
+
+/* Data Control Register (DATACTRL) */
+#define NPCX_I3C_DATACTRL_FLUSHTB       0
+#define NPCX_I3C_DATACTRL_FLUSHFB       1
+#define NPCX_I3C_DATACTRL_UNLOCK        3
+#define NPCX_I3C_DATACTRL_TXTRIG        FIELD(4, 2)
+#define NPCX_I3C_DATACTRL_RXTRIG        FIELD(6, 2)
+#define NPCX_I3C_DATACTRL_TXCOUNT       FIELD(16, 6)
+#define NPCX_I3C_DATACTRL_RXCOUNT       FIELD(24, 6)
+#define NPCX_I3C_DATACTRL_TXFULL        30
+#define NPCX_I3C_DATACTRL_RXEMPTY       31
+
+/* Write Byte Data Register (WDATAB) */
+#define NPCX_I3C_WDATAB_DATA        FIELD(0, 8)
+#define NPCX_I3C_WDATAB_END_B       8
+#define NPCX_I3C_WDATAB_END_A       16
+
+/* Write Byte Data as End Register (WDATABE) */
+#define NPCX_I3C_WDATABE_DATA        FIELD(0, 8)
+
+/* Write Half-Word Data Register (WDATAH) */
+#define NPCX_I3C_WDATAH_DATA0       FIELD(0, 8)
+#define NPCX_I3C_WDATAH_DATA1       FIELD(8, 8)
+#define NPCX_I3C_WDATAH_END         16
+
+/* Write Half-Word Data Register as End (WDATAHE) */
+#define NPCX_I3C_WDATAHE_DATA0       FIELD(0, 8)
+#define NPCX_I3C_WDATAHE_DATA1       FIELD(8, 8)
+
+/* Read Byte Data Register (RDATAB) */
+#define NPCX_I3C_RDATAB_DATA       FIELD(0, 8)
+
+/* Read Half-Word Data Register (RDATAH) */
+#define NPCX_I3C_RDATAH_DATA0       FIELD(0, 8)
+#define NPCX_I3C_RDATAH_DATA1       FIELD(8, 8)
+
+/* Capabilities 2 Register (CAPABILITIES2) */
+#define NPCX_I3C_CAPABILITIES2_MAPCNT       FIELD(0, 4)
+#define NPCX_I3C_CAPABILITIES2_I2C10B       4
+#define NPCX_I3C_CAPABILITIES2_I2CRST       5
+#define NPCX_I3C_CAPABILITIES2_I2CDEVID     6
+#define NPCX_I3C_CAPABILITIES2_DATA32       7
+#define NPCX_I3C_CAPABILITIES2_IBIEXT       8
+#define NPCX_I3C_CAPABILITIES2_IBIXREG      9
+#define NPCX_I3C_CAPABILITIES2_SMLANE       FIELD(12, 2)
+#define NPCX_I3C_CAPABILITIES2_V1_1         16
+#define NPCX_I3C_CAPABILITIES2_TGTRST       17
+#define NPCX_I3C_CAPABILITIES2_GROUP        FIELD(18, 2)
+#define NPCX_I3C_CAPABILITIES2_AASA         21
+#define NPCX_I3C_CAPABILITIES2_SSTSUB       22
+#define NPCX_I3C_CAPABILITIES2_SSTWR        23
+
+/* Capabilities Register (CAPABILITIES) */
+#define NPCX_I3C_CAPABILITIES_IDENA         FIELD(0, 2)
+#define NPCX_I3C_CAPABILITIES_IDREG         FIELD(2, 4)
+#define NPCX_I3C_CAPABILITIES_HDRSUPP       FIELD(6, 3)
+#define NPCX_I3C_CAPABILITIES_CNTLR         9
+#define NPCX_I3C_CAPABILITIES_SADDR         FIELD(10, 2)
+#define NPCX_I3C_CAPABILITIES_CCCHANDLE     FIELD(12, 4)
+#define NPCX_I3C_CAPABILITIES_IBI_MR_HJ     FIELD(16, 5)
+#define NPCX_I3C_CAPABILITIES_TIMECTRL      21
+#define NPCX_I3C_CAPABILITIES_EXTFIFO       FIELD(23, 3)
+#define NPCX_I3C_CAPABILITIES_FIFOTX        FIELD(26, 2)
+#define NPCX_I3C_CAPABILITIES_FIFORX        FIELD(28, 2)
+#define NPCX_I3C_CAPABILITIES_INT           30
+#define NPCX_I3C_CAPABILITIES_DMA           31
+
+/* Dynamic Address Register (DYNADDR) */
+#define NPCX_I3C_DYNADDR_DAVALID            0
+#define NPCX_I3C_DYNADDR_DADDR              FIELD(1, 7)
+#define NPCX_I3C_DYNADDR_CAUSE              FIELD(8, 3)
+
+/* Maximum Limits Register (MAXLIMITS) */
+#define NPCX_I3C_MAXLIMITS_MAXRD            FIELD(0, 12)
+#define NPCX_I3C_MAXLIMITS_MAXWR            FIELD(16, 12)
+
+/* ID Extension Register (IDEXT) */
+#define NPCX_I3C_IDEXT_DCR                  FIELD(8, 8)
+#define NPCX_I3C_IDEXT_BCR                  FIELD(16, 8)
+
+/* Vendor ID Register (VENDORID) */
+#define NPCX_I3C_VENDORID_VID               FIELD(0, 15)
+
+/* Timing Control Clock Register (TCCLOCK) */
+#define NPCX_I3C_TCCLOCK_ACCURACY           FIELD(0, 8)
+#define NPCX_I3C_TCCLOCK_FREQ               FIELD(8, 8)
+
+/* Matching Address Index Register (MSGLAST) */
+#define NPCX_I3C_MSGLAST_MAPLAST            FIELD(0, 4)
+#define NPCX_I3C_MSGLAST_LASTSTATIC         4
+#define NPCX_I3C_MSGLAST_LASTGROUP          5
+#define NPCX_I3C_MSGLAST_LASTMODE           FIELD(6, 2)
+#define NPCX_I3C_MSGLAST_MAPLASTM1          FIELD(8, 4)
+#define NPCX_I3C_MSGLAST_LASTGROUPM1        13
+#define NPCX_I3C_MSGLAST_LASTMODE1          FIELD(14, 2)
+#define NPCX_I3C_MSGLAST_MAPLASTM2          FIELD(16, 4)
+#define NPCX_I3C_MSGLAST_LASTGROUPM2        21
+#define NPCX_I3C_MSGLAST_LASTMODE2          FIELD(22, 2)
+
+/* Target Reset Recovery Time Register (RSTACTTIME) */
+#define NPCX_I3C_RSTACTTIME_PERRSTTIM       FIELD(0, 8)
+#define NPCX_I3C_RSTACTTIME_SYSRSTTIM       FIELD(8, 8)
+
+/* HDR Command Byte Register (HDRCMD) */
+#define NPCX_I3C_HDRCMD_CMD0                FIELD(0, 8)
+#define NPCX_I3C_HDRCMD_OVFL                30
+#define NPCX_I3C_HDRCMD_NEWCMD              31
+
+/* Group Definition Register (GROUPDEF) */
+#define NPCX_I3C_GROUPDEF_GRP0ENA           0
+#define NPCX_I3C_GROUPDEF_GRP0DA            FIELD(1, 7)
+#define NPCX_I3C_GROUPDEF_GRP1ENA           8
+#define NPCX_I3C_GROUPDEF_GRP1DA            FIELD(9, 7)
+#define NPCX_I3C_GROUPDEF_GRP2ENA           16
+#define NPCX_I3C_GROUPDEF_GRP2DA            FIELD(17, 7)
+
+/* Map Control 0 Register (MAPCTRL0) */
+#define NPCX_I3C_MAPCTRL0_ENA               0
+#define NPCX_I3C_MAPCTRL0_DA                FIELD(1, 7)
+#define NPCX_I3C_MAPCTRL0_CAUSE             FIELD(8, 3)
+
+/* Map Control n Register (MAPCTRLn where n = 1-8) */
+#define NPCX_I3C_MAPCTRLn_ENA               0
+#define NPCX_I3C_MAPCTRLn_ADDR              FIELD(1, 7)
+#define NPCX_I3C_MAPCTRLn_MAPSA             8
+#define NPCX_I3C_MAPCTRLn_NACK              12
+#define NPCX_I3C_MAPCTRLn_AUTO              13
+#define NPCX_I3C_MAPCTRLn_SLOT_PID          FIELD(14, 5)
+
+/* Extended IBI Data 1 Register (IBIEXT1) */
+#define NPCX_I3C_IBIEXT1_CNT                FIELD(0, 3)
+#define NPCX_I3C_IBIEXT1_EXT1               FIELD(8, 8)
+#define NPCX_I3C_IBIEXT1_EXT2               FIELD(16, 8)
+#define NPCX_I3C_IBIEXT1_EXT3               FIELD(24, 8)
+
+/* Extended IBI Data 2 Register (IBIEXT2) */
+#define NPCX_I3C_IBIEXT2_EXT4               FIELD(0, 8)
+#define NPCX_I3C_IBIEXT2_EXT5               FIELD(8, 8)
+#define NPCX_I3C_IBIEXT2_EXT6               FIELD(16, 8)
+#define NPCX_I3C_IBIEXT2_EXT7               FIELD(24, 8)
+
+/* MDMA device registers */
+struct mdma_reg {
+	/* 0x000: Channel 0 Control */
+	volatile uint32_t MDMA_CTL0;
+	/* 0x004: Channel 0 Source Base Address (RO) */
+	volatile uint32_t MDMA_SRCB0;
+	/* 0x008: Channel 0 Destination Base Address */
+	volatile uint32_t MDMA_DSTB0;
+	/* 0x00C: Channel 0 Transfer Count */
+	volatile uint32_t MDMA_TCNT0;
+	/* 0x010: reserved */
+	volatile uint32_t reserved0;
+	/* 0x014: Channel 0 Current Destination (RO) */
+	volatile uint32_t MDMA_CDST0;
+	/* 0x018: Channel 0 Current Transfer Count (RO) */
+	volatile uint32_t MDMA_CTCNT0;
+	/* 0x01C: reserved */
+	volatile uint32_t reserved1;
+	/* 0x020: Channel 1 Control */
+	volatile uint32_t MDMA_CTL1;
+	/* 0x024: Channel 1 Source Base Address */
+	volatile uint32_t MDMA_SRCB1;
+	/* 0x028: Channel 1 Destination Base Address (RO) */
+	volatile uint32_t MDMA_DSTB1;
+	/* 0x02C: Channel 1 Transfer Count */
+	volatile uint32_t MDMA_TCNT1;
+	/* 0x030: reserved */
+	volatile uint32_t reserved2;
+	/* 0x034: Channel 1 Current Source (RO) */
+	volatile uint32_t MDMA_CSRC1;
+	/* 0x038: Channel 1 Current Transfer Count (RO) */
+	volatile uint32_t MDMA_CTCNT1;
+};
+
+/* Channel 0/1 Control Register (MDMA_CTL0/MDMA_CTL1) */
+#define NPCX_MDMA_CTL_MDMAEN                FIELD(0, 1)
+#define NPCX_MDMA_CTL_MPD                   FIELD(1, 1)
+#define NPCX_MDMA_CTL_SIEN                  FIELD(8, 1)
+#define NPCX_MDMA_CTL_MPS                   FIELD(14, 1)
+#define NPCX_MDMA_CTL_TC                    FIELD(18, 1)
+
+/* Channel 0/1 Transfer Count Register (MDMA_TCNT0/MDMA_TCNT1) */
+#define NPCX_MDMA_TCNT_TFR_CNT              FIELD(0, 13)
+
+/* Channel 0/1 Current Transfer Count Register (MDMA_CTCNT0/MDMA_CTCNT1) */
+#define NPCX_MDMA_CTCNT_CURENT_TFR_CNT      FIELD(0, 13)
+
 /* SPIP (SPI Peripheral Interface) registers */
 struct spip_reg {
 	/* 0x000: SPIP Data In/Out */
@@ -1926,3 +2327,4 @@ struct spip_reg {
 #define NPCX_SPIP_STAT_RBF              1
 
 #endif /* _NUVOTON_NPCX_REG_DEF_H */
+

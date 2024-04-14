@@ -131,6 +131,41 @@ void npcx_host_interface_sel(enum npcx_hif_type hif_type)
 	SET_FIELD(inst_scfg->DEVCNT, NPCX_DEVCNT_HIF_TYP_SEL_FIELD, hif_type);
 }
 
+void npcx_i3c_target_sel(int module, bool enable)
+{
+	struct scfg_reg *inst_scfg = HAL_SFCG_INST();
+
+    switch(module) {
+        case 0:
+			if(enable == true) {
+	            inst_scfg->DEV_CTL3 |= BIT(NPCX_DEV_CTL3_I3C1_MS);
+			}
+			else
+			{
+				inst_scfg->DEV_CTL3 &= ~BIT(NPCX_DEV_CTL3_I3C1_MS);
+			}
+			break;
+        case 1:
+			if(enable == true) {
+	            inst_scfg->DEV_CTL3 |= BIT(NPCX_DEV_CTL3_I3C2_MS);
+			}
+			else
+			{
+				inst_scfg->DEV_CTL3 &= ~BIT(NPCX_DEV_CTL3_I3C2_MS);
+			}
+			break;
+        case 2:
+			if(enable == true) {
+	            inst_scfg->DEV_CTL3 |= BIT(NPCX_DEV_CTL3_I3C3_MS);
+			}
+			else
+			{
+				inst_scfg->DEV_CTL3 &= ~BIT(NPCX_DEV_CTL3_I3C3_MS);
+			}
+			break;
+    }            
+}
+
 void npcx_dbg_freeze_enable(bool enable)
 {
 	const uintptr_t dbg_base = npcx_scfg_cfg.base_dbg;

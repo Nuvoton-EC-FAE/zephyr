@@ -336,7 +336,51 @@
 			status = "disabled";
 			#address-cells = <3>;
 			#size-cells = <0>;
+            
+			instance-id = <0>;
+			mdma-channel = <5>;
 		};
+
+		i3c1: i3c@400f2000 {
+			compatible = "nuvoton,npcx-i3c";
+			reg = <0x400f2000 0x2000>;
+			interrupts = <66 3>;
+
+			/* Reset controller */
+			resets = <&rst NPCX_RESET_I3C_2>;
+
+			/* APB4 is time-out reference clk */
+			clock-names = "mclkd", "apb4";
+			clocks = <&pcc NPCX_CLOCK_BUS_MCLKD NPCX_PWDWN_CTL8 2>,
+				 <&pcc NPCX_CLOCK_BUS_APB4 0 0>;
+			status = "disabled";
+			#address-cells = <3>;
+			#size-cells = <0>;
+            
+			instance-id = <1>;
+			mdma-channel = <6>;
+		};
+
+		i3c2: i3c@400f4000 {
+			compatible = "nuvoton,npcx-i3c";
+			reg = <0x400f4000 0x2000>;
+			interrupts = <67 3>;
+
+			/* Reset controller */
+			resets = <&rst NPCX_RESET_I3C_3>;
+
+			/* APB4 is time-out reference clk */
+			clock-names = "mclkd", "apb4";
+			clocks = <&pcc NPCX_CLOCK_BUS_MCLKD NPCX_PWDWN_CTL8 3>,
+				 <&pcc NPCX_CLOCK_BUS_APB4 0 0>;
+			status = "disabled";
+			#address-cells = <3>;
+			#size-cells = <0>;
+            
+			instance-id = <2>;
+			mdma-channel = <7>;
+		};
+
 
 		rst: reset-controller@400c3100 {
 			compatible = "nuvoton,npcx-rst";

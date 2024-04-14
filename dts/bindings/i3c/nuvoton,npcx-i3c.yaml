@@ -65,3 +65,55 @@ properties:
       If true, open drain high time is same as ODBAUD
       so that open drain clock is 50% duty cycle.
       Default is false.
+
+  instance-id:
+    required: true
+    type: int
+    description: |
+      Instance ID of the device, used to specify port number
+
+  slave:
+    required: false
+    type: boolean
+    description: Initialized as slave (default) / master
+
+  secondary:
+    required: false
+    type: boolean
+    description: Initialized as a secondary master
+
+  static-address:
+    required: false
+    type: int
+    description: |
+      The default address of the device
+
+  part-id:
+    required: false
+    type: int
+    description: |
+      PID[31:16], used for bus enumeration with entdaa
+
+  vendor-id:
+    required: false
+    type: int
+    description: |
+      PID[11:0], used for bus enumeration with entdaa
+
+  bcr:
+    required: false
+    type: int
+    description: |
+      Bus Characteristics Register, used for bus enumeration with entdaa
+
+  dcr:
+    required: false
+    type: int
+    description: |
+      Device Characteristics Register, used for bus enumeration with entdaa
+
+  mdma-channel:
+    required: true
+    type: int
+    description: |
+      mdma channel for I3C module transfer

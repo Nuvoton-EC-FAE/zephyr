@@ -15,6 +15,7 @@
 
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/i3c.h>
+#include <zephyr/drivers/i3c/target_device.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/drivers/reset.h>
 
@@ -60,6 +61,9 @@ struct npcx_i3c_config {
 	/* Pointer to controller registers. */
 	struct i3c_reg *base;
 
+	/* Pointer to controller registers. */
+	struct mdma_reg *mdma;
+
 	/* Pointer to the clock device. */
 	const struct device *clock_dev;
 
@@ -80,6 +84,16 @@ struct npcx_i3c_config {
 
 	/* Disable open drain high push pull */
 	bool disable_open_drain_high_pp;
+
+	bool target_mode;
+	bool secondary_mode;
+	uint8_t  instance_id;
+	uint8_t  mdma_channel;
+	uint8_t  static_address;
+	uint8_t  bcr;
+	uint8_t  dcr;
+	uint32_t  part_id;
+	uint32_t  vendor_id;
 };
 
 struct npcx_i3c_data {
@@ -87,11 +101,15 @@ struct npcx_i3c_data {
 	struct k_sem lock_sem;         /* Mutex of i3c controller */
 	struct k_sem sync_sem;         /* Semaphore used for synchronization */
 	struct k_sem ibi_lock_sem;     /* Semaphore used for ibi */
+	struct k_sem target_lock_sem;         /* Mutex of i3c target */
+	struct k_sem target_event_sem;         /* Mutex of i3c target ibi/hot join/bus controll event */
 
 	struct {
 		/* I3C open drain clock frequency in Hz. */
 		uint32_t i3c_od_scl_hz;
 	} clocks;
+
+    struct i3c_target_config *target_config;
 
 #ifdef CONFIG_I3C_USE_IBI
 	struct {
@@ -1390,26 +1408,396 @@ out:
 
 	return ret;
 }
+
 #endif /* CONFIG_I3C_USE_IBI */
+
+static void npcx_i3c_enable_target_interrupt(const struct device *dev, bool enable) 
+{
+    const struct npcx_i3c_config *config = dev->config;
+	struct i3c_reg *inst = config->base;
+
+    /* disbale the target interrupt events */
+    inst->INTCLR = BIT(NPCX_I3C_INTCLR_START) | BIT(NPCX_I3C_INTCLR_MATCHED) | BIT(NPCX_I3C_INTCLR_STOP) |
+                   BIT(NPCX_I3C_INTCLR_RXPEND) | BIT(NPCX_I3C_INTCLR_TXNOTFULL) | BIT(NPCX_I3C_INTCLR_DACHG) |
+                   BIT(NPCX_I3C_INTCLR_CCC) | BIT(NPCX_I3C_INTCLR_ERRWARN) | BIT(NPCX_I3C_INTCLR_HDRMATCH) |
+                   BIT(NPCX_I3C_INTCLR_CHANDLED) | BIT(NPCX_I3C_INTCLR_EVENT) | BIT(NPCX_I3C_INTCLR_TGTRST);
+
+    /* clear the target interrupt status */
+    inst->STATUS = inst->STATUS;
+
+    /* enable the target interrupt events */
+    if(enable == true)
+    {
+        inst->INTSET = BIT(NPCX_I3C_INTSET_START) | BIT(NPCX_I3C_INTSET_MATCHED)| BIT(NPCX_I3C_INTSET_STOP) | BIT(NPCX_I3C_INTSET_DACHG) | BIT(NPCX_I3C_INTSET_RXPEND) |
+                       BIT(NPCX_I3C_INTSET_CCC) | BIT(NPCX_I3C_INTSET_ERRWARN) | BIT(NPCX_I3C_INTSET_HDRMATCH) | BIT(NPCX_I3C_INTSET_CHANDLED);
+    }
+}
+
+static int npcx_i3c_target_config(const struct device *dev)
+{
+    const struct npcx_i3c_config *config = dev->config;
+	struct npcx_i3c_data *data = dev->data;
+	struct i3c_reg *inst = config->base;
+
+    k_sem_init(&data->target_lock_sem, 1, 1);
+    k_sem_init(&data->target_event_sem, 1, 1);
+
+	npcx_i3c_target_sel(config->instance_id, true);
+
+    inst->PARTNO = config->part_id;
+    SET_FIELD(inst->VENDORID, NPCX_I3C_VENDORID_VID, (uint16_t) (config->vendor_id));
+    SET_FIELD(inst->IDEXT, NPCX_I3C_IDEXT_DCR, config->dcr);
+    SET_FIELD(inst->IDEXT, NPCX_I3C_IDEXT_BCR, config->bcr);
+    SET_FIELD(inst->CONFIG, NPCX_I3C_CONFIG_SADDR, config->static_address);
+    SET_FIELD(inst->CONFIG, NPCX_I3C_CONFIG_HDRCMD, false);
+    //SET_FIELD(inst->MAXLIMITS, NPCX_I3C_MAXLIMITS_MAXRD, 4096 - 1);
+    //SET_FIELD(inst->MAXLIMITS, NPCX_I3C_MAXLIMITS_MAXWR, 4096 - 1);
+
+    inst->CONFIG &= ~BIT(NPCX_I3C_CONFIG_IDRAND);
+    //inst->CONFIG |= BIT(NPCX_I3C_CONFIG_MATCHSS);
+    inst->CONFIG |= BIT(NPCX_I3C_CONFIG_TGTENA);
+
+    /* disbale the target interrupt events */
+    /* enable the target interrupt events */
+    npcx_i3c_enable_target_interrupt(dev, true); 
+
+	/* Configure interrupt */
+	config->irq_config_func(dev);
+
+	return 0;
+}
+
+static int npcx_i3c_target_ibi_raise(const struct device *dev, struct i3c_ibi *request)
+{
+	const struct npcx_i3c_config *config = dev->config;
+	struct i3c_reg *inst = config->base;
+	struct npcx_i3c_data *data = dev->data;
+    int index;
+
+    /* the request or the payload were not specific */
+	if((request == NULL) || ((request->payload_len) && (request->payload == NULL)))
+    {
+		return -EINVAL;
+	}
+
+    /* the I3C was not in target mode or the bus is in HDR mode now */
+    if((!IS_BIT_SET(inst->CONFIG, NPCX_I3C_CONFIG_TGTENA)) || 
+       (IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_STHDR)))
+    {
+        return -EINVAL;
+    }
+
+	switch (request->ibi_type) {
+        case I3C_IBI_TARGET_INTR:
+            if(IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_IBIDIS))
+            {
+                return -ENOTSUP;
+            }
+
+            k_sem_take(&data->target_event_sem, K_FOREVER);
+
+            if(request->payload_len) 
+            {
+                SET_FIELD(inst->CTRL, NPCX_I3C_CTRL_IBIDATA, request->payload[0]);
+                
+                if(request->payload_len > 1)
+                {
+                    if(request->payload_len <= 32)
+                    {
+                        SET_FIELD(inst->IBIEXT1, NPCX_I3C_IBIEXT1_CNT, request->payload_len - 1);
+                        for(index = 1; index < (request->payload_len - 2); index++)
+                        {
+                            inst->WDATAB = request->payload[index];
+                        }
+
+                        inst->WDATABE = request->payload[index];
+                    }
+                    else
+                    {
+                        /* transfer data from MDMA */
+                    }
+
+                    inst->CTRL |= BIT(NPCX_I3C_CTRL_EXTDATA);
+                }
+            }
+
+            SET_FIELD(inst->CTRL, NPCX_I3C_CTRL_EVENT, 1);
+            break;
+
+        case I3C_IBI_CONTROLLER_ROLE_REQUEST:
+            if(IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_MRDIS))
+            {
+                return -ENOTSUP;
+            }
+
+			/* the bus controller request was generate only a target with controller mode capabilities mode */
+            if(GET_FIELD(inst->MCONFIG, NPCX_I3C_MCONFIG_CTRENA) != MCONFIG_CTRENA_CAPABLE)
+            {
+                return -ENOTSUP;
+            }
+
+            k_sem_take(&data->target_event_sem, K_FOREVER);
+            SET_FIELD(inst->CTRL, NPCX_I3C_CTRL_EVENT, 2);
+            break;
+
+        case I3C_IBI_HOTJOIN:
+            if(IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_HJDIS))
+            {
+                return -ENOTSUP;
+            }
+
+            k_sem_take(&data->target_event_sem, K_FOREVER);
+            inst->CONFIG &= ~BIT(NPCX_I3C_CONFIG_TGTENA);
+			SET_FIELD(inst->CTRL, NPCX_I3C_CTRL_IBIDATA, 0x00);
+			inst->CTRL &= ~BIT(NPCX_I3C_CTRL_EXTDATA);
+            SET_FIELD(inst->CTRL, NPCX_I3C_CTRL_EVENT, 3);
+            inst->CONFIG |= BIT(NPCX_I3C_CONFIG_TGTENA);
+            break;
+
+        default:
+            return -EINVAL;
+	}
+
+    return 0;
+}
+
+static int npcx_i3c_target_tx_write(const struct device *dev, uint8_t *buf, uint16_t len)
+{
+	const struct npcx_i3c_config *config = dev->config;
+	struct i3c_reg *inst = config->base;
+    //struct npcx_i3c_data *data = dev->data;
+    int index = 0;
+
+    /* check is in target mode */
+    if(!IS_BIT_SET(inst->CONFIG, NPCX_I3C_CONFIG_TGTENA)) {
+        return -EACCES;
+    }
+
+    if(buf != NULL)
+    {
+        for(index = 0; index < len; index++)
+        {
+            if(!IS_BIT_SET(inst->DATACTRL, NPCX_I3C_DATACTRL_TXFULL)) {
+                if(index == (len - 1)) {
+                    inst->WDATABE = buf[index];
+                }
+                else {
+                    inst->WDATAB = buf[index];
+                }
+            }
+        }
+    }
+
+	/* return total bytes written */
+	return index;
+}
+
+static int npcx_i3c_target_register(const struct device *dev, struct i3c_target_config *cfg)
+{
+    //const struct npcx_i3c_config *config = dev->config;
+	struct npcx_i3c_data *data = dev->data;
+	//struct i3c_reg *inst = config->base;
+
+    //LOG_ERR("npcx_i3c_target_register: %x\n", cfg);
+
+	data->target_config = cfg;
+
+    /* enable the target interrupt events */
+    //inst->CONFIG |= BIT(NPCX_I3C_CONFIG_TGTENA);
+    //npcx_i3c_enable_target_interrupt(dev, true); 
+
+	return 0;
+}
+
+static int npcx_i3c_target_unregister(const struct device *dev, struct i3c_target_config *cfg)
+{
+    const struct npcx_i3c_config *config = dev->config;
+	struct npcx_i3c_data *data = dev->data;
+	struct i3c_reg *inst = config->base;
+
+    /* disbale the target interrupt events */
+    npcx_i3c_enable_target_interrupt(dev, false);
+    inst->CONFIG &= ~BIT(NPCX_I3C_CONFIG_TGTENA);
+
+	data->target_config = NULL;
+
+	return 0;
+}
+
+static void npcx_i3c_target_isr(const struct device *dev)
+{
+    struct npcx_i3c_data *data = dev->data;
+    struct i3c_target_config *target_config = data->target_config;
+	const struct npcx_i3c_config *config = dev->config;
+	struct i3c_reg *inst = config->base;
+	const struct i3c_target_callbacks *target_cb = data->target_config->callbacks;
+    uint32_t val;
+
+	while(inst->INTMASKED) {
+		if (IS_BIT_SET(inst->INTMASKED, NPCX_I3C_INTMASKED_DACHG)) {
+			inst->INTCLR = BIT(NPCX_I3C_INTCLR_DACHG);
+			inst->STATUS = BIT(NPCX_I3C_STATUS_DACHG);
+
+		    if(IS_BIT_SET(inst->DYNADDR, NPCX_I3C_DYNADDR_DAVALID))
+	    	{
+		        if(target_config != NULL) {
+	            	target_config->address = GET_FIELD(inst->DYNADDR, NPCX_I3C_DYNADDR_DADDR);
+	        	}
+	    	}
+
+			inst->INTSET = BIT(NPCX_I3C_INTSET_DACHG);
+		}
+		else if (IS_BIT_SET(inst->INTMASKED, NPCX_I3C_INTMASKED_START)) {
+			inst->INTCLR = BIT(NPCX_I3C_INTCLR_START);
+			inst->STATUS = BIT(NPCX_I3C_STATUS_START);
+
+		    /* check the IBI was has finished or not -- nacked form host */
+	    	/* config the MDMA for Tx and Rx transfer */
+			inst->INTSET = BIT(NPCX_I3C_INTSET_START);
+		}
+		else if (IS_BIT_SET(inst->INTMASKED, NPCX_I3C_INTMASKED_MATCHED)) {
+			inst->INTCLR = BIT(NPCX_I3C_INTCLR_MATCHED);
+			inst->STATUS = BIT(NPCX_I3C_STATUS_MATCHED);
+
+		    /* The current bus request is an SDR mode read from this target device */
+		    if(IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_STREQRD))
+		    {
+	        	if((target_cb != NULL) && (target_cb->read_requested_cb != NULL)) {
+	            	target_cb->read_requested_cb(data->target_config, (uint8_t *) &val);
+	        	}
+
+	        	/* enable the Tx interrupt */
+	     		//inst->INTCLR = BIT(NPCX_I3C_INTCLR_TXNOTFULL);
+	    		//inst->STATUS = BIT(NPCX_I3C_STATUS_TXNOTFULL);
+	    		//inst->INTSET = BIT(NPCX_I3C_INTSET_TXNOTFULL);
+	    	}
+	    	/* The current bus request is an SDR mode write to this target device */
+	    	else if(IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_STREQWR))
+	    	{
+	        	if ((target_cb != NULL) && (target_cb->write_requested_cb != NULL)) {
+	            	target_cb->write_requested_cb(data->target_config);
+	        	}
+	    	}
+
+			inst->INTSET = BIT(NPCX_I3C_INTSET_MATCHED);
+		}
+		else if (IS_BIT_SET(inst->INTMASKED, NPCX_I3C_INTMASKED_RXPEND)) {
+			inst->INTCLR = BIT(NPCX_I3C_INTCLR_RXPEND);
+			inst->STATUS = BIT(NPCX_I3C_STATUS_RXPEND);
+
+		    while(!IS_BIT_SET(inst->DATACTRL, NPCX_I3C_DATACTRL_RXEMPTY)) {
+		        val = inst->RDATAB;
+	        	if ((target_cb != NULL) && (target_cb->write_received_cb != NULL)) {
+		            target_cb->write_received_cb(data->target_config, (uint8_t) val);
+	        	}
+	    	}
+
+			inst->INTSET = BIT(NPCX_I3C_INTSET_RXPEND);
+		}
+		else if (IS_BIT_SET(inst->INTMASKED, NPCX_I3C_INTMASKED_TXNOTFULL)) {
+			inst->INTCLR = BIT(NPCX_I3C_INTCLR_TXNOTFULL);
+			inst->STATUS = BIT(NPCX_I3C_STATUS_TXNOTFULL);
+
+		    while(!IS_BIT_SET(inst->DATACTRL, NPCX_I3C_DATACTRL_TXFULL)) {
+		        if ((target_cb != NULL) && (target_cb->read_processed_cb != NULL)) {
+	            	target_cb->read_processed_cb(data->target_config, (uint8_t *) &val);
+	            	inst->WDATAB = val;
+	        	}
+			}
+
+			//inst->INTSET = BIT(NPCX_I3C_INTSET_TXNOTFULL);
+		}
+		else if (IS_BIT_SET(inst->INTMASKED, NPCX_I3C_INTMASKED_CCC)) {
+			inst->INTCLR = BIT(NPCX_I3C_INTCLR_CCC);
+			inst->STATUS = BIT(NPCX_I3C_STATUS_CCC);
+
+			inst->INTSET = BIT(NPCX_I3C_INTSET_CCC);
+		}
+		else if (IS_BIT_SET(inst->INTMASKED, NPCX_I3C_INTMASKED_ERRWARN)) {
+			inst->INTCLR = BIT(NPCX_I3C_INTCLR_ERRWARN);
+			inst->STATUS = BIT(NPCX_I3C_STATUS_ERRWARN);
+
+		    inst->ERRWARN = inst->ERRWARN;
+
+			inst->INTSET = BIT(NPCX_I3C_INTSET_ERRWARN);
+		}
+		else if (IS_BIT_SET(inst->INTMASKED, NPCX_I3C_INTMASKED_HDRMATCH)) {
+			inst->INTCLR = BIT(NPCX_I3C_INTCLR_HDRMATCH);
+			inst->STATUS = BIT(NPCX_I3C_STATUS_HDRMATCH);
+
+			inst->INTSET = BIT(NPCX_I3C_INTSET_HDRMATCH);
+		}
+		else if (IS_BIT_SET(inst->INTMASKED, NPCX_I3C_INTMASKED_CHANDLED)) {
+			inst->INTCLR = BIT(NPCX_I3C_INTCLR_CHANDLED);
+			inst->STATUS = BIT(NPCX_I3C_STATUS_CHANDLED);
+
+			inst->INTSET = BIT(NPCX_I3C_INTSET_CHANDLED);
+		}
+		else if (IS_BIT_SET(inst->INTMASKED, NPCX_I3C_INTMASKED_EVENT)) {
+			inst->INTCLR = BIT(NPCX_I3C_INTCLR_EVENT);
+			inst->STATUS = BIT(NPCX_I3C_STATUS_EVENT);
+
+		    if(0x03 == GET_FIELD(inst->STATUS, NPCX_I3C_STATUS_EVDET))
+		    {
+	        	k_sem_give(&data->target_event_sem);
+	    	}
+
+			inst->INTSET = BIT(NPCX_I3C_INTSET_EVENT);
+		}
+		else if (IS_BIT_SET(inst->INTMASKED, NPCX_I3C_INTMASKED_STOP)) {
+			inst->INTCLR = BIT(NPCX_I3C_INTCLR_STOP);
+			inst->STATUS = BIT(NPCX_I3C_STATUS_STOP);
+
+		    /* disable the Tx interrupt */
+			inst->INTCLR = BIT(NPCX_I3C_INTCLR_TXNOTFULL);
+			inst->STATUS = BIT(NPCX_I3C_STATUS_TXNOTFULL);
+
+	    	/* flush the Tx/Rx FIFO */
+	    	inst->DATACTRL |= BIT(NPCX_I3C_DATACTRL_FLUSHTB) | BIT(NPCX_I3C_DATACTRL_FLUSHFB);
+
+	    	/* Notify upper layer a STOP condition received */
+	    	if ((target_cb != NULL) && (target_cb->stop_cb != NULL)) {
+		        target_cb->stop_cb(data->target_config);
+	    	}
+
+			inst->INTSET = BIT(NPCX_I3C_INTSET_STOP);
+		}
+		else if (IS_BIT_SET(inst->INTMASKED, NPCX_I3C_INTMASKED_TGTRST)) {
+			inst->INTCLR = BIT(NPCX_I3C_INTCLR_TGTRST);
+			inst->STATUS = BIT(NPCX_I3C_STATUS_TGTRST);
+
+			inst->INTSET = BIT(NPCX_I3C_INTSET_TGTRST);
+		}
+	}
+}
 
 static void npcx_i3c_isr(const struct device *dev)
 {
-#ifdef CONFIG_I3C_USE_IBI
-	LOG_DBG("I3C IBI_ISR");
 	const struct npcx_i3c_config *config = dev->config;
 	struct i3c_reg *inst = config->base;
 
-	/* Target start detected */
-	if (IS_BIT_SET(inst->MSTATUS, NPCX_I3C_MSTATUS_TGTSTART)) {
-		/* Disable further target initiated IBI interrupt */
-		inst->MINTCLR = BIT(NPCX_I3C_MINTCLR_TGTSTART);
+    //if((IS_BIT_SET(inst->CONFIG, NPCX_I3C_CONFIG_TGTENA) && inst->INTMASKED) {
+	if(inst->INTMASKED) {
+        npcx_i3c_target_isr(dev);
+    }
 
-		/* Handle IBI in workqueue */
-		i3c_ibi_work_enqueue_cb(dev, npcx_i3c_ibi_work);
+	//if(((GET_FIELD(inst->MCONFIG, NPCX_I3C_MCONFIG_CTRENA) == 0x01) ||
+	//   (GET_FIELD(inst->MCONFIG, NPCX_I3C_MCONFIG_CTRENA) == 0x02))  && 
+	//   inst->MINTMASKED) {
+	if(inst->MINTMASKED) {
+	#ifdef CONFIG_I3C_USE_IBI
+		LOG_DBG("I3C IBI_ISR");
+
+		/* Target start detected */
+		if (IS_BIT_SET(inst->MSTATUS, NPCX_I3C_MSTATUS_TGTSTART)) {
+			/* Disable further target initiated IBI interrupt */
+			inst->MINTCLR = BIT(NPCX_I3C_MINTCLR_TGTSTART);
+
+			/* Handle IBI in workqueue */
+			i3c_ibi_work_enqueue_cb(dev, npcx_i3c_ibi_work);
+		}
+	#endif /* CONFIG_I3C_USE_IBI */
 	}
-#else
-	ARG_UNUSED(dev);
-#endif /* CONFIG_I3C_USE_IBI */
 }
 
 static int npcx_i3c_get_scl_config(struct npcx_i3c_freq_cfg *cfg, uint32_t i3c_src_clk,
@@ -1645,6 +2033,7 @@ static int npcx_i3c_init(const struct device *dev)
 	struct npcx_i3c_data *data = dev->data;
 	struct i3c_config_controller *ctrl_config = &data->common.ctrl_config;
 	const struct device *const clk_dev = config->clock_dev;
+
 	int ret = 0;
 
 	LOG_DBG("I3C driver init");
@@ -1673,37 +2062,42 @@ static int npcx_i3c_init(const struct device *dev)
 	k_sem_init(&data->sync_sem, 0, 1);
 	k_sem_init(&data->ibi_lock_sem, 1, 1);
 
-	ret = i3c_addr_slots_init(dev);
-	if (ret != 0) {
-		LOG_ERR("Addr slots init fail %d", ret);
-		goto err_out;
-	}
-
 	/* Currently can only act as primary controller. */
-	ctrl_config->is_secondary = false;
+	ctrl_config->is_secondary = config->secondary_mode;
 
 	/* HDR mode not supported at the moment. */
 	ctrl_config->supported_hdr = 0U;
 
-	ret = npcx_i3c_configure(dev, I3C_CONFIG_CONTROLLER, ctrl_config);
-	if (ret != 0) {
-		LOG_ERR("Apply i3c_configure() fail %d", ret);
-		goto err_out;
+	if(config->target_mode == false) {
+		ret = i3c_addr_slots_init(dev);
+		if (ret != 0) {
+			LOG_ERR("Addr slots init fail %d", ret);
+			goto err_out;
+		}
+
+		ret = npcx_i3c_configure(dev, I3C_CONFIG_CONTROLLER, ctrl_config);
+		if (ret != 0) {
+			LOG_ERR("Apply i3c_configure() fail %d", ret);
+			goto err_out;
+		}
+
+		/* Just in case the bus is not in idle. */
+		ret = npcx_i3c_recover_bus(dev);
+		if (ret != 0) {
+			ret = -EIO;
+			LOG_ERR("Apply i3c_recover_bus() fail %d", ret);
+			goto err_out;
+		}
+		
+		/* Configure interrupt */
+		config->irq_config_func(dev);
+
+		/* Perform bus initialization */
+		ret = i3c_bus_init(dev, &config->common.dev_list);
 	}
-
-	/* Just in case the bus is not in idle. */
-	ret = npcx_i3c_recover_bus(dev);
-	if (ret != 0) {
-		ret = -EIO;
-		LOG_ERR("Apply i3c_recover_bus() fail %d", ret);
-		goto err_out;
+	else {
+		npcx_i3c_target_config(dev);
 	}
-
-	/* Configure interrupt */
-	config->irq_config_func(dev);
-
-	/* Perform bus initialization */
-	ret = i3c_bus_init(dev, &config->common.dev_list);
 
 err_out:
 
@@ -1723,9 +2117,15 @@ static const struct i3c_driver_api npcx_i3c_driver_api = {
 
 	.i3c_xfers = npcx_i3c_transfer,
 
+	.target_tx_write = npcx_i3c_target_tx_write,
+	.target_register = npcx_i3c_target_register,
+	.target_unregister = npcx_i3c_target_unregister,
+
 #ifdef CONFIG_I3C_USE_IBI
 	.ibi_enable = npcx_i3c_ibi_enable,
 	.ibi_disable = npcx_i3c_ibi_disable,
+
+	.ibi_raise = npcx_i3c_target_ibi_raise,
 #endif
 };
 
@@ -1748,7 +2148,16 @@ static const struct i3c_driver_api npcx_i3c_driver_api = {
 		.common.dev_list.num_i2c = ARRAY_SIZE(npcx_i3c_i2c_device_array_##id),             \
 		.pincfg = PINCTRL_DT_INST_DEV_CONFIG_GET(id),                                      \
 		.disable_open_drain_high_pp =                                                      \
-			DT_INST_PROP_OR(id, disable_open_drain_high_pp, false),                    \
+			DT_INST_PROP_OR(id, disable_open_drain_high_pp, false),                        \
+		.target_mode = DT_INST_PROP_OR(id, slave, false),                                  \
+		.secondary_mode = DT_INST_PROP_OR(id, secondary, false),                   \
+		.instance_id = DT_INST_PROP_OR(id, instance_id, 0),                                \
+		.mdma_channel = DT_INST_PROP_OR(id, mdma_channel, 0),                              \
+		.static_address = DT_INST_PROP_OR(id, static_address, 0),                      \
+		.part_id = DT_INST_PROP_OR(id, part_id, 0),                                        \
+		.vendor_id = DT_INST_PROP_OR(id, vendor_id, 0),                                    \
+		.bcr = DT_INST_PROP_OR(id, bcr, 0),                                                \
+		.dcr = DT_INST_PROP_OR(id, dcr, 0),                                                \
 	};                                                                                         \
 	static struct npcx_i3c_data npcx_i3c_data_##id = {                                         \
 		.common.ctrl_config.scl.i3c = DT_INST_PROP_OR(id, i3c_scl_hz, 0),                  \
