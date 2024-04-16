@@ -11,5 +11,5 @@ endif # BOARD_NPCX4M8F_EVB
 config SYS_CLOCK_TICKS_PER_SEC
 	default 1000
 
-config INPUT
-	default y if KSCAN
+config KSCAN
+	default y
