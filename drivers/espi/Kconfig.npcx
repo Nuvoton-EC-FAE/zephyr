@@ -100,6 +100,10 @@ config ESPI_PERIPHERAL_8042_KBC
 config ESPI_PERIPHERAL_HOST_IO
 	default y
 
+config ESPI_PERIPHERAL_HOST_IO_PORT
+	hex "Host I/O peripheral port for eSPI host command"
+	default 0x62
+
 config ESPI_PERIPHERAL_DEBUG_PORT_80
 	default y
 

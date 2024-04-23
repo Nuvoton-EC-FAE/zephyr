@@ -995,6 +995,14 @@ void npcx_host_init_subs_host_domain(void)
 		 * modules by setting bit 0 in its Control (index is 0x30) reg.
 		 */
 		host_c2h_write_io_cfg_reg(EC_CFG_IDX_LDN, EC_CFG_LDN_KBC);
+
+		// // Configure IO address of CMD port for KBC (default: 0x60)
+		// host_c2h_write_io_cfg_reg(EC_CFG_IDX_CMD_IO_ADDR_H, (0x60 >> 8) & 0xff);
+		// host_c2h_write_io_cfg_reg(EC_CFG_IDX_CMD_IO_ADDR_L, 0x60 & 0xff);
+
+		// // Configure IO address of Data port for KBC (default: 0x64)
+		// host_c2h_write_io_cfg_reg(EC_CFG_IDX_DATA_IO_ADDR_H, (0x64 >> 8) & 0xff);
+		// host_c2h_write_io_cfg_reg(EC_CFG_IDX_DATA_IO_ADDR_L, 0x64 & 0xff);
 		host_c2h_write_io_cfg_reg(EC_CFG_IDX_CTRL, 0x01);
 
 		host_c2h_write_io_cfg_reg(EC_CFG_IDX_LDN, EC_CFG_LDN_MOUSE);
@@ -1008,11 +1016,11 @@ void npcx_host_init_subs_host_domain(void)
 		*/
 		host_c2h_write_io_cfg_reg(EC_CFG_IDX_LDN, EC_CFG_LDN_ACPI);
 		/* Configure IO address of CMD portt (default: 0x662) */
-		host_c2h_write_io_cfg_reg(EC_CFG_IDX_CMD_IO_ADDR_H, (0x662 >> 8) & 0xff);
-		host_c2h_write_io_cfg_reg(EC_CFG_IDX_CMD_IO_ADDR_L, 0x662 & 0xff);
+		host_c2h_write_io_cfg_reg(EC_CFG_IDX_CMD_IO_ADDR_H, (CONFIG_ESPI_PERIPHERAL_HOST_IO_PORT  >> 8) & 0xff);
+		host_c2h_write_io_cfg_reg(EC_CFG_IDX_CMD_IO_ADDR_L, CONFIG_ESPI_PERIPHERAL_HOST_IO_PORT  & 0xff);
 		/* Configure IO address of Data portt (default: 0x666) */
-		host_c2h_write_io_cfg_reg(EC_CFG_IDX_DATA_IO_ADDR_H, ((0x66) >> 8) & 0xff);
-		host_c2h_write_io_cfg_reg(EC_CFG_IDX_DATA_IO_ADDR_L, (0x666) & 0xff);
+		host_c2h_write_io_cfg_reg(EC_CFG_IDX_DATA_IO_ADDR_H, ((CONFIG_ESPI_PERIPHERAL_HOST_IO_PORT + 4) >> 8) & 0xff);
+		host_c2h_write_io_cfg_reg(EC_CFG_IDX_DATA_IO_ADDR_L, (CONFIG_ESPI_PERIPHERAL_HOST_IO_PORT +4) & 0xff);
 		host_c2h_write_io_cfg_reg(EC_CFG_IDX_CTRL, 0x01);
 	}
 
