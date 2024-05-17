@@ -91,9 +91,17 @@ static const struct bbram_driver_api bbram_npcx_driver_api = {
 	.write = bbram_npcx_write,
 };
 
+
+static int bbram_npcx_init(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	return 0;
+}
+
 #define BBRAM_INIT(inst)                                                                           \
 	BBRAM_NPCX_DECL_CONFIG(inst);                                                              \
-	DEVICE_DT_INST_DEFINE(inst, NULL, NULL, NULL, &bbram_cfg_##inst, PRE_KERNEL_1,             \
+	DEVICE_DT_INST_DEFINE(inst, bbram_npcx_init, NULL, NULL, &bbram_cfg_##inst, PRE_KERNEL_1,             \
 			      CONFIG_BBRAM_INIT_PRIORITY, &bbram_npcx_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(BBRAM_INIT);
