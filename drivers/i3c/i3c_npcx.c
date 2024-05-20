@@ -2044,6 +2044,11 @@ static int npcx_i3c_init(const struct device *dev)
 		return -ENODEV;
 	}
 
+	if(config->instance_id != 0x00) {
+		/* the I3C2 and I3C3 interface were enabled when the eSPI/SHI host interface was selected */
+		npcx_host_interface_sel(NPCX_HIF_TYPE_ESPI_SHI);
+	}
+
 	/* Set I3C_PD operational */
 	ret = clock_control_on(clk_dev, (clock_control_subsys_t)&config->clock_subsys);
 	if (ret < 0) {
