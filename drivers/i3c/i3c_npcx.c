@@ -1504,8 +1504,7 @@ static int npcx_i3c_target_ibi_raise(const struct device *dev, struct i3c_ibi *r
                 {
                     if(request->payload_len <= 32)
                     {
-                        SET_FIELD(inst->IBIEXT1, NPCX_I3C_IBIEXT1_CNT, request->payload_len - 1);
-                        for(index = 1; index < (request->payload_len - 2); index++)
+                        for(index = 1; index < (request->payload_len - 1); index++)
                         {
                             inst->WDATAB = request->payload[index];
                         }
@@ -1517,6 +1516,7 @@ static int npcx_i3c_target_ibi_raise(const struct device *dev, struct i3c_ibi *r
                         /* transfer data from MDMA */
                     }
 
+					SET_FIELD(inst->IBIEXT1, NPCX_I3C_IBIEXT1_CNT, 0);
                     inst->CTRL |= BIT(NPCX_I3C_CTRL_EXTDATA);
                 }
             }
