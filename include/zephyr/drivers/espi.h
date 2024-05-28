@@ -207,9 +207,14 @@ enum espi_vwire_signal {
 	ESPI_VWIRE_SIGNAL_HOST_RST_WARN,
 	ESPI_VWIRE_SIGNAL_SLP_A,
 	ESPI_VWIRE_SIGNAL_SUS_PWRDN_ACK,
+    ESPI_VWIRE_SIGNAL_SLP_MSC,
+    ESPI_VWIRE_SIGNAL_Z8,
+    ESPI_VWIRE_SIGNAL_Z9,
+    ESPI_VWIRE_SIGNAL_Z10,
 	ESPI_VWIRE_SIGNAL_SUS_WARN,
 	ESPI_VWIRE_SIGNAL_SLP_WLAN,
 	ESPI_VWIRE_SIGNAL_SLP_LAN,
+    ESPI_VWIRE_SIGNAL_FL_ACK,
 	ESPI_VWIRE_SIGNAL_HOST_C10,
 	ESPI_VWIRE_SIGNAL_DNX_WARN,
 	/* Virtual wires that can only be sent from slave to master */
@@ -227,7 +232,11 @@ enum espi_vwire_signal {
 	/* System control interrupt */
 	ESPI_VWIRE_SIGNAL_SCI,
 	ESPI_VWIRE_SIGNAL_DNX_ACK,
+    ESPI_VWIRE_SIGNAL_CPU_TEMP_READ,
+    ESPI_VWIRE_SIGNAL_RTC_READ,
 	ESPI_VWIRE_SIGNAL_SUS_ACK,
+    ESPI_VWIRE_SIGNAL_FL_REQ,
+    ESPI_VWIRE_SIGNAL_FL_REQ_ATOMIC,
 	/*
 	 * Virtual wire GPIOs that can be sent from slave to master for
 	 * platform specific usage.
@@ -240,10 +249,12 @@ enum espi_vwire_signal {
 	ESPI_VWIRE_SIGNAL_SLV_GPIO_5,
 	ESPI_VWIRE_SIGNAL_SLV_GPIO_6,
 	ESPI_VWIRE_SIGNAL_SLV_GPIO_7,
-	ESPI_VWIRE_SIGNAL_SLV_GPIO_8,
-	ESPI_VWIRE_SIGNAL_SLV_GPIO_9,
-	ESPI_VWIRE_SIGNAL_SLV_GPIO_10,
-	ESPI_VWIRE_SIGNAL_SLV_GPIO_11,
+
+	/* USB-C port over current */
+	ESPI_VWIRE_SIGNAL_OCB_0,
+	ESPI_VWIRE_SIGNAL_OCB_1,
+	ESPI_VWIRE_SIGNAL_OCB_2,
+	ESPI_VWIRE_SIGNAL_OCB_3,
 
 	/* Number of Virtual Wires */
 	ESPI_VWIRE_SIGNAL_COUNT
@@ -283,6 +294,10 @@ enum lpc_peripheral_opcode {
 	/* Shared memory region support to return the ACPI response data */
 	EACPI_GET_SHARED_MEMORY,
 #endif /* CONFIG_ESPI_PERIPHERAL_ACPI_SHM_REGION */
+#if defined(CONFIG_ESPI_NPCX_PERIPHERAL_SHAW3)
+    /* Shared memory region 3 support to return the mapped data */
+    EACPI_GET_SHARED_MEMORY_3,
+#endif
 #if defined(CONFIG_ESPI_PERIPHERAL_CUSTOM_OPCODE)
 	/* Other customized transactions */
 	ECUSTOM_HOST_SUBS_INTERRUPT_EN = ECUSTOM_START_OPCODE,

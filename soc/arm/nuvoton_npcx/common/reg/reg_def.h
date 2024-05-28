@@ -903,6 +903,43 @@ struct shm_reg {
 	/* 0x04C: Core_Offset in Window 1 Address */
 	volatile uint16_t COFS1;
 	volatile uint16_t reserved12;
+	volatile uint32_t reserved13[12];
+
+	/* 0x080: Extended Shared Memory Core Status */
+	volatile uint8_t SMCE_STS;
+	/* 0x081: Extended Shared Memory Core Control */
+	volatile uint8_t SMCE_CTL;
+	volatile uint8_t reserved14[5];
+	/* 0x087: Extended Shared Access Windows Size */
+	volatile uint8_t WINE_SIZE;
+	/* 0x088: Shared Access Window 3, Semaphore */
+	volatile uint8_t SHAW3_SEM;
+	/* 0x089: Shared Access Window 4, Semaphore */
+	volatile uint8_t SHAW4_SEM;
+	volatile uint8_t reserved15[6];
+	/* 0x090: Shared Access Window 3 Write Protect */
+	volatile uint8_t WIN3_WR_PROT;
+	/* 0x091: Shared Access Window 3 Read Protect */
+	volatile uint8_t WIN3_RD_PROT;
+	/* 0x092: Shared Access Window 4 Write Protect */
+	volatile uint8_t WIN4_WR_PROT;
+	/* 0x093: Shared Access Window 4 Read Protect */
+	volatile uint8_t WIN4_RD_PROT;
+	volatile uint8_t reserved16[12];
+	/* 0x0A0: Shared Access Window 3 Base */
+	volatile uint32_t WIN_BASE3;
+	/* 0x0A4: Shared Access Window 4 Base */
+	volatile uint32_t WIN_BASE4;
+	volatile uint32_t reserved17[8];
+	/* 0x0C8: Host_Offset in Windows 3, 4 Status */
+	volatile uint8_t HOFSE_STS;
+	/* 0x0C9: Host_Offset in Windows 3, 4 Control */
+	volatile uint8_t HOFSE_CTL;
+	/* 0x0CA: Core_Offset in Window 4 Address */
+	volatile uint16_t COFS4;
+	/* 0x0CC: Core_Offset in Window 3 Address */
+	volatile uint16_t COFS3;
+	volatile uint16_t reserved18;
 };
 
 /* SHM register fields */
@@ -944,6 +981,12 @@ struct shm_reg {
 #define NPCX_DP80CTL_CIEN                5
 #define NPCX_DP80CTL_DP80_HF_CFG         7
 #define NPCX_DP80BUF_OFFS_FIELD          FIELD(8, 3)
+#define NPCX_SMCE_STS_HSEM3W             4
+#define NPCX_SMCE_STS_HSEM4W             5
+#define NPCX_SMCE_CTL_HSEM3_IE           3
+#define NPCX_SMCE_CTL_HSEM4_IE           4
+#define NPCX_WIN_SIZE_RWIN3_SIZE_FIELD   FIELD(0, 4)
+#define NPCX_WIN_SIZE_RWIN4_SIZE_FIELD   FIELD(4, 4)
 
 /*
  * Keyboard and Mouse Controller (KBC) device registers

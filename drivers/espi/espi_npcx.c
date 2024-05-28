@@ -134,13 +134,27 @@ static const struct npcx_vw_in_config vw_in_tbl[] = {
 	NPCX_DT_VW_IN_CONF(ESPI_VWIRE_SIGNAL_OOB_RST_WARN, vw_oob_rst_warn),
 	/* index 07h (In)  */
 	NPCX_DT_VW_IN_CONF(ESPI_VWIRE_SIGNAL_HOST_RST_WARN, vw_host_rst_warn),
+
+	/* index 33h (In)  */
+	NPCX_DT_VW_IN_CONF(ESPI_VWIRE_SIGNAL_SLP_MSC, vw_slp_msc),
+	NPCX_DT_VW_IN_CONF(ESPI_VWIRE_SIGNAL_Z8, vw_z8),
+	NPCX_DT_VW_IN_CONF(ESPI_VWIRE_SIGNAL_Z9, vw_z9),
+	NPCX_DT_VW_IN_CONF(ESPI_VWIRE_SIGNAL_Z10, vw_z10),
+
 	/* index 41h (In)  */
 	NPCX_DT_VW_IN_CONF(ESPI_VWIRE_SIGNAL_SUS_WARN, vw_sus_warn),
 	NPCX_DT_VW_IN_CONF(ESPI_VWIRE_SIGNAL_SUS_PWRDN_ACK, vw_sus_pwrdn_ack),
 	NPCX_DT_VW_IN_CONF(ESPI_VWIRE_SIGNAL_SLP_A, vw_slp_a),
+
 	/* index 42h (In)  */
 	NPCX_DT_VW_IN_CONF(ESPI_VWIRE_SIGNAL_SLP_LAN, vw_slp_lan),
 	NPCX_DT_VW_IN_CONF(ESPI_VWIRE_SIGNAL_SLP_WLAN, vw_slp_wlan),
+
+	/* index 43h (In)  */
+	NPCX_DT_VW_IN_CONF(ESPI_VWIRE_SIGNAL_FL_ACK, vw_fl_ack),
+
+	/* index 47h (In)  */
+	NPCX_DT_VW_IN_CONF(ESPI_VWIRE_SIGNAL_HOST_C10, vw_host_c10),
 };
 
 static const struct npcx_vw_out_config vw_out_tbl[] = {
@@ -158,8 +172,17 @@ static const struct npcx_vw_out_config vw_out_tbl[] = {
 	NPCX_DT_VW_OUT_CONF(ESPI_VWIRE_SIGNAL_SCI, vw_sci),
 	NPCX_DT_VW_OUT_CONF(ESPI_VWIRE_SIGNAL_SMI, vw_smi),
 	NPCX_DT_VW_OUT_CONF(ESPI_VWIRE_SIGNAL_HOST_RST_ACK, vw_host_rst_ack),
+
+	/* index 35h (Out) */
+	NPCX_DT_VW_OUT_CONF(ESPI_VWIRE_SIGNAL_CPU_TEMP_READ, vw_cpu_temp_read),
+	NPCX_DT_VW_OUT_CONF(ESPI_VWIRE_SIGNAL_RTC_READ, vw_rtc_read),
+
 	/* index 40h (Out) */
 	NPCX_DT_VW_OUT_CONF(ESPI_VWIRE_SIGNAL_SUS_ACK, vw_sus_ack),
+
+	/* index 45h (Out) */
+	NPCX_DT_VW_OUT_CONF(ESPI_VWIRE_SIGNAL_FL_REQ, vw_fl_req),
+	NPCX_DT_VW_OUT_CONF(ESPI_VWIRE_SIGNAL_FL_REQ_ATOMIC, vw_fl_req_atomic),
 };
 
 /*  Virtual wire GPIOs for platform level usage (High at Reset state) */

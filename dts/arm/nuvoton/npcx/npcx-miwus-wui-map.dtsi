@@ -471,6 +471,20 @@
 			miwus = <&miwu2 3 4>; /* HOST_C10 */
 		};
 
+		/* MIWU group E */
+		wui_vw_slp_msc: wui2-5-0 {
+			miwus = <&miwu2 4 0>;
+		};
+		wui_vw_z8: wui2-5-1 {
+			miwus = <&miwu2 4 1>;
+		};
+		wui_vw_z9: wui2-5-2 {
+			miwus = <&miwu2 4 2>;
+		};
+		wui_vw_z10: wui2-5-3 {
+			miwus = <&miwu2 4 3>;
+		};
+
 		/* MIWU group F */
 		wui_iof1: wui2-6-1 {
 			miwus = <&miwu2 5 1>; /* GPIOF1 */

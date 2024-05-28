@@ -68,6 +68,24 @@
 			vw-wui = <&wui_vw_host_rst_warn>;
 		};
 
+		/* index 033h (In) */
+		vw-slp-msc {
+			vw-reg = <NPCX_VWEVMS8 0x01>;
+			vw-wui = <&wui_vw_slp_msc>;
+		};
+		vw-z8 {
+			vw-reg = <NPCX_VWEVMS8 0x02>;
+			vw-wui = <&wui_vw_z8>;
+		};
+		vw-z9 {
+			vw-reg = <NPCX_VWEVMS8 0x04>;
+			vw-wui = <&wui_vw_z9>;
+		};
+		vw-z10 {
+			vw-reg = <NPCX_VWEVMS8 0x08>;
+			vw-wui = <&wui_vw_z10>;
+		};
+
 		/* index 41h (In) */
 		vw-sus-warn {
 			vw-reg = <NPCX_VWEVMS3 0x01>;
@@ -90,6 +108,18 @@
 		vw-slp-wlan {
 			vw-reg = <NPCX_VWEVMS4 0x02>;
 			vw-wui = <&wui_vw_slp_wlan>;
+		};
+
+		/* index 43h (In) */
+		vw-fl-ack {
+			vw-reg = <NPCX_VWEVMS5 0x01>;
+			vw-wui = <&wui_vw_fl_ack>;
+		};
+
+		/* index 47h (In) */
+		vw-host-c10 {
+			vw-reg = <NPCX_VWEVMS7 0x01>;
+			vw-wui = <&wui_vw_host_c10>;
 		};
 
 		/* eSPI Virtual Vire (VW) output configuration */
@@ -133,9 +163,25 @@
 			vw-reg = <NPCX_VWEVSM2 0x08>;
 		};
 
+		/* index 35h (Out) */
+		vw-cpu-temp-read {
+			vw-reg = <NPCX_VWEVSM6 0x01>;
+		};
+		vw-rtc-read {
+			vw-reg = <NPCX_VWEVSM6 0x02>;
+		};
+
 		/* index 40h (Out) */
 		vw-sus-ack {
 			vw-reg = <NPCX_VWEVSM3 0x01>;
+		};
+
+		/* index 40h (Out) */
+		vw-fl-req {
+			vw-reg = <NPCX_VWEVSM4 0x01>;
+		};
+		vw-fl-req-atomic {
+			vw-reg = <NPCX_VWEVSM4 0x02>;
 		};
 	};
 };

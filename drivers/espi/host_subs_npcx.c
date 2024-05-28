@@ -196,6 +196,7 @@ struct host_sub_npcx_data host_sub_data;
 #define EC_CFG_LDN_SHM   0x0F
 #define EC_CFG_LDN_ACPI  0x11 /* PM Channel 1 */
 #define EC_CFG_LDN_HCMD  0x12 /* PM Channel 2 */
+#define EC_CFG_LDN_ESHM  0x1D
 
 /* Index of EC (4E/4F) Configuration Register */
 #define EC_CFG_IDX_LDN             0x07
@@ -216,6 +217,16 @@ struct host_sub_npcx_data host_sub_data;
 #define EC_CFG_IDX_SHM_WND2_ADDR_2     0xFA
 #define EC_CFG_IDX_SHM_WND2_ADDR_3     0xFB
 #define EC_CFG_IDX_SHM_DP80_ADDR_RANGE 0xFD
+
+#define EC_CFG_IDX_ESHM_CFG            0xF1
+#define EC_CFG_IDX_ESHM_WND3_ADDR_0    0xF4
+#define EC_CFG_IDX_ESHM_WND3_ADDR_1    0xF5
+#define EC_CFG_IDX_ESHM_WND3_ADDR_2    0xF6
+#define EC_CFG_IDX_ESHM_WND3_ADDR_3    0xF7
+#define EC_CFG_IDX_ESHM_WND4_ADDR_0    0xF8
+#define EC_CFG_IDX_ESHM_WND4_ADDR_1    0xF9
+#define EC_CFG_IDX_ESHM_WND4_ADDR_2    0xFA
+#define EC_CFG_IDX_ESHM_WND4_ADDR_3    0xFB
 
 /* Host sub-device local inline functions */
 static inline uint8_t host_shd_mem_wnd_size_sl(uint32_t size)
@@ -448,6 +459,29 @@ static void host_shared_mem_region_init(void)
 	 * might use EACPI_GET_SHARED_MEMORY in espi_api_lpc_read_request()
 	 * instead of setting host command flags here directly.
 	 */
+}
+#endif
+
+#if defined(CONFIG_ESPI_NPCX_PERIPHERAL_SHAW3)
+/* Host command argument and memory map buffers */
+static uint8_t shm_win3_mmap[CONFIG_ESPI_NPCX_PERIPHERAL_SHAW3_SIZE] 
+	__aligned(CONFIG_ESPI_NPCX_PERIPHERAL_SHAW3_SIZE);
+
+static void host_shared_window_3_init(void)
+{
+	struct shm_reg *const inst_shm = host_sub_cfg.inst_shm;
+	uint32_t win_size = CONFIG_ESPI_NPCX_PERIPHERAL_SHAW3_SIZE;
+
+	/* Don't stall SHM transactions */
+	inst_shm->SHM_CTL &= ~0x40;
+	/* Disable Window 3 protection */
+	inst_shm->WIN3_WR_PROT = 0;
+	inst_shm->WIN3_RD_PROT = 0;
+
+	/* Configure Win3 size. */
+	SET_FIELD(inst_shm->WINE_SIZE, NPCX_WIN_SIZE_RWIN3_SIZE_FIELD,
+		host_shd_mem_wnd_size_sl(win_size));
+	inst_shm->WIN_BASE3 = (uint32_t) shm_win3_mmap;
 }
 #endif
 
@@ -845,6 +879,13 @@ int npcx_host_periph_read_request(enum lpc_peripheral_opcode op,
 			*data = (uint32_t)shm_acpi_mmap;
 			break;
 #endif /* CONFIG_ESPI_PERIPHERAL_ACPI_SHM_REGION */
+
+#if defined(CONFIG_ESPI_NPCX_PERIPHERAL_SHAW3)
+		case EACPI_GET_SHARED_MEMORY_3:
+			*data = (uint32_t)shm_win3_mmap;
+			break;
+#endif
+
 		default:
 			return -EINVAL;
 		}
@@ -995,14 +1036,6 @@ void npcx_host_init_subs_host_domain(void)
 		 * modules by setting bit 0 in its Control (index is 0x30) reg.
 		 */
 		host_c2h_write_io_cfg_reg(EC_CFG_IDX_LDN, EC_CFG_LDN_KBC);
-
-		// // Configure IO address of CMD port for KBC (default: 0x60)
-		// host_c2h_write_io_cfg_reg(EC_CFG_IDX_CMD_IO_ADDR_H, (0x60 >> 8) & 0xff);
-		// host_c2h_write_io_cfg_reg(EC_CFG_IDX_CMD_IO_ADDR_L, 0x60 & 0xff);
-
-		// // Configure IO address of Data port for KBC (default: 0x64)
-		// host_c2h_write_io_cfg_reg(EC_CFG_IDX_DATA_IO_ADDR_H, (0x64 >> 8) & 0xff);
-		// host_c2h_write_io_cfg_reg(EC_CFG_IDX_DATA_IO_ADDR_L, 0x64 & 0xff);
 		host_c2h_write_io_cfg_reg(EC_CFG_IDX_CTRL, 0x01);
 
 		host_c2h_write_io_cfg_reg(EC_CFG_IDX_LDN, EC_CFG_LDN_MOUSE);
@@ -1016,11 +1049,15 @@ void npcx_host_init_subs_host_domain(void)
 		*/
 		host_c2h_write_io_cfg_reg(EC_CFG_IDX_LDN, EC_CFG_LDN_ACPI);
 		/* Configure IO address of CMD portt (default: 0x662) */
-		host_c2h_write_io_cfg_reg(EC_CFG_IDX_CMD_IO_ADDR_H, (CONFIG_ESPI_PERIPHERAL_HOST_IO_PORT  >> 8) & 0xff);
-		host_c2h_write_io_cfg_reg(EC_CFG_IDX_CMD_IO_ADDR_L, CONFIG_ESPI_PERIPHERAL_HOST_IO_PORT  & 0xff);
+		host_c2h_write_io_cfg_reg(EC_CFG_IDX_CMD_IO_ADDR_H, 
+		                          (CONFIG_ESPI_PERIPHERAL_ACPI_DATA_PORT_NUM >> 8) & 0xff);
+		host_c2h_write_io_cfg_reg(EC_CFG_IDX_CMD_IO_ADDR_L, 
+		                          CONFIG_ESPI_PERIPHERAL_ACPI_DATA_PORT_NUM & 0xff);
 		/* Configure IO address of Data portt (default: 0x666) */
-		host_c2h_write_io_cfg_reg(EC_CFG_IDX_DATA_IO_ADDR_H, ((CONFIG_ESPI_PERIPHERAL_HOST_IO_PORT + 4) >> 8) & 0xff);
-		host_c2h_write_io_cfg_reg(EC_CFG_IDX_DATA_IO_ADDR_L, (CONFIG_ESPI_PERIPHERAL_HOST_IO_PORT +4) & 0xff);
+		host_c2h_write_io_cfg_reg(EC_CFG_IDX_DATA_IO_ADDR_H, 
+		                          ((CONFIG_ESPI_PERIPHERAL_ACPI_DATA_PORT_NUM + 4) >> 8) & 0xff);
+		host_c2h_write_io_cfg_reg(EC_CFG_IDX_DATA_IO_ADDR_L, 
+								  (CONFIG_ESPI_PERIPHERAL_ACPI_DATA_PORT_NUM + 4) & 0xff);
 		host_c2h_write_io_cfg_reg(EC_CFG_IDX_CTRL, 0x01);
 	}
 
@@ -1069,6 +1106,35 @@ void npcx_host_init_subs_host_domain(void)
 	/* Enable SHM direct memory access */
 	host_c2h_write_io_cfg_reg(EC_CFG_IDX_CTRL, 0x01);
 	}
+
+#if CONFIG_ESPI_NPCX_PERIPHERAL_SHAW3
+	/* Select 'extended Shared Memory' bank which LDN are 0x1D */
+	host_c2h_write_io_cfg_reg(EC_CFG_IDX_LDN, EC_CFG_LDN_ESHM);
+
+	#if defined(CONFIG_ESPI_NPCX_PERIPHERAL_SHAW3_IO)
+	#if CONFIG_ESPI_NPCX_PERIPHERAL_SHAW3_IO
+	/* WIN 3 mapping to IO space */
+	host_c2h_write_io_cfg_reg(0xF1, 
+			host_c2h_read_io_cfg_reg(0xF1) | 0x10);
+	#else
+	host_c2h_write_io_cfg_reg(0xF1, 
+			host_c2h_read_io_cfg_reg(0xF1) & ~0x10);
+	#endif
+	#endif
+
+	/* WIN3 as Host Command on the IO address */
+	#if defined(CONFIG_ESPI_NPCX_PERIPHERAL_SHAW3_BASE)
+	host_c2h_write_io_cfg_reg(EC_CFG_IDX_ESHM_WND3_ADDR_3,
+		(CONFIG_ESPI_NPCX_PERIPHERAL_SHAW3_BASE >> 24) & 0xff);
+	host_c2h_write_io_cfg_reg(EC_CFG_IDX_ESHM_WND3_ADDR_2,
+		(CONFIG_ESPI_NPCX_PERIPHERAL_SHAW3_BASE >> 16) & 0xff);
+	host_c2h_write_io_cfg_reg(EC_CFG_IDX_ESHM_WND3_ADDR_1,
+		(CONFIG_ESPI_NPCX_PERIPHERAL_SHAW3_BASE >> 8) & 0xff);
+	host_c2h_write_io_cfg_reg(EC_CFG_IDX_ESHM_WND3_ADDR_0,
+		CONFIG_ESPI_NPCX_PERIPHERAL_SHAW3_BASE & 0xff);
+	#endif
+#endif
+
 	LOG_DBG("Hos sub-modules configurations are done!");
 }
 
@@ -1138,6 +1204,9 @@ int npcx_host_init_subs_core_domain(const struct device *host_bus_dev,
 #endif
 #if defined(CONFIG_ESPI_PERIPHERAL_ACPI_SHM_REGION)
 	host_shared_mem_region_init();
+#endif
+#if defined(CONFIG_ESPI_NPCX_PERIPHERAL_SHAW3)
+	host_shared_window_3_init();
 #endif
 #if defined(CONFIG_ESPI_PERIPHERAL_DEBUG_PORT_80)
 	host_port80_init();
