@@ -33,6 +33,9 @@ struct espi_npcx_config {
 	struct npcx_wui espi_rst_wui;
 	/* pinmux configuration */
 	const struct pinctrl_dev_config *pcfg;
+#if DT_INST_NODE_HAS_PROP(0, rst_gpios)
+	struct gpio_dt_spec reset_pin;
+#endif
 };
 
 struct espi_npcx_data {
@@ -40,7 +43,7 @@ struct espi_npcx_data {
 	uint8_t plt_rst_asserted;
 	uint8_t espi_rst_level;
 	uint8_t sx_state;
-#if defined(CONFIG_ESPI_OOB_CHANNEL)
+#if !defined(CONFIG_ESPI_OOB_CHANNEL_RX_ASYNC)
 	struct k_sem oob_rx_lock;
 #endif
 #if defined(CONFIG_ESPI_FLASH_CHANNEL)
@@ -65,6 +68,7 @@ struct espi_npcx_data {
 #define NPCX_ESPI_MAXFREQ_25         1
 #define NPCX_ESPI_MAXFREQ_33         2
 #define NPCX_ESPI_MAXFREQ_50         3
+#define NPCX_ESPI_MAXFREQ_66         4
 
 /* Minimum delay before acknowledging a virtual wire */
 #define NPCX_ESPI_VWIRE_ACK_DELAY    10ul /* 10 us */
@@ -318,9 +322,22 @@ static void espi_bus_cfg_update_isr(const struct device *dev)
 static void espi_bus_oob_rx_isr(const struct device *dev)
 {
 	struct espi_npcx_data *const data = dev->data;
+#if defined(CONFIG_ESPI_OOB_CHANNEL_RX_ASYNC)
+	struct espi_reg *const inst = HAL_INSTANCE(dev);
+	struct espi_event evt = {
+			.evt_type = ESPI_BUS_EVENT_OOB_RECEIVED,
+			.evt_details = 0,
+			.evt_data = 0,
+		};
+
+	/* Get received package length and set to additional detail of event */
+	evt.evt_details = NPCX_OOB_RX_PACKAGE_LEN(inst->OOBRXBUF[0]);
+	espi_send_callbacks(&data->callbacks, dev, evt);
+#else
 
 	LOG_DBG("%s", __func__);
 	k_sem_give(&data->oob_rx_lock);
+#endif
 }
 #endif
 
@@ -630,13 +647,21 @@ static void espi_vw_generic_isr(const struct device *dev, struct npcx_wui *wui)
 
 static void espi_vw_espi_rst_isr(const struct device *dev, struct npcx_wui *wui)
 {
-	struct espi_reg *const inst = HAL_INSTANCE(dev);
 	struct espi_npcx_data *const data = dev->data;
 	struct espi_event evt = { ESPI_BUS_RESET, 0, 0 };
 
-	data->espi_rst_level = IS_BIT_SET(inst->ESPISTS,
-					  NPCX_ESPISTS_ESPIRST_LVL);
-	LOG_DBG("eSPI RST level is %d!", data->espi_rst_level);
+#if DT_INST_NODE_HAS_PROP(0, rst_gpios)
+	const struct espi_npcx_config *const config = dev->config;
+
+	data->espi_rst_level = gpio_pin_get_raw(config->reset_pin.port,
+						   config->reset_pin.pin);
+#else
+	struct espi_reg *const inst = HAL_INSTANCE(dev);
+
+	data->espi_rst_level = !IS_BIT_SET(inst->ESPISTS,
+					      NPCX_ESPISTS_ESPIRST_LVL);
+#endif
+	LOG_DBG("eSPI RST asserted is %d!", data->espi_rst_level);
 
 	evt.evt_data = data->espi_rst_level;
 	espi_send_callbacks(&data->callbacks, dev, evt);
@@ -927,10 +952,9 @@ static int espi_npcx_receive_oob(const struct device *dev,
 				struct espi_oob_packet *pckt)
 {
 	struct espi_reg *const inst = HAL_INSTANCE(dev);
-	struct espi_npcx_data *const data = dev->data;
 	uint8_t *oob_buf = pckt->buf;
 	uint32_t oob_data;
-	int idx_rx_buf, sz_oob_rx, ret;
+	int idx_rx_buf, sz_oob_rx;
 
 	/* Check eSPI bus status first */
 	if (IS_BIT_SET(inst->ESPISTS, NPCX_ESPISTS_BERR)) {
@@ -938,15 +962,15 @@ static int espi_npcx_receive_oob(const struct device *dev,
 		return -EIO;
 	}
 
-	/* Notify host that OOB received buffer is free now. */
-	inst->OOBCTL |= BIT(NPCX_OOBCTL_OOB_FREE);
-
+#if !defined(CONFIG_ESPI_OOB_CHANNEL_RX_ASYNC)
 	/* Wait until get oob package or timeout */
-	ret = k_sem_take(&data->oob_rx_lock, K_MSEC(ESPI_OOB_MAX_TIMEOUT));
+	struct espi_npcx_data *const data = dev->data;
+	int ret = k_sem_take(&data->oob_rx_lock, K_MSEC(ESPI_OOB_MAX_TIMEOUT));
 	if (ret == -EAGAIN) {
 		LOG_ERR("%s: Timeout", __func__);
 		return -ETIMEDOUT;
 	}
+#endif
 
 	/*
 	 * PUT_OOB header (first 4 bytes) in npcx 32-bits rx buffer
@@ -988,6 +1012,9 @@ static int espi_npcx_receive_oob(const struct device *dev,
 		for (i = 0; i < sz_oob_rx % 4; i++)
 			*(oob_buf++) = (oob_data >> (8 * i)) & 0xFF;
 	}
+
+	/* Notify host that OOB received buffer is free now. */
+	inst->OOBCTL |= BIT(NPCX_OOBCTL_OOB_FREE);
 	return 0;
 }
 #endif
@@ -1292,6 +1319,9 @@ static const struct espi_npcx_config espi_npcx_config = {
 	.espi_rst_wui = NPCX_DT_WUI_ITEM_BY_NAME(0, espi_rst_wui),
 	.clk_cfg = NPCX_DT_CLK_CFG_ITEM(0),
 	.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(0),
+#if DT_INST_NODE_HAS_PROP(0, rst_gpios)
+	.reset_pin = GPIO_DT_SPEC_INST_GET(0, rst_gpios),
+#endif
 };
 
 DEVICE_DT_INST_DEFINE(0, &espi_npcx_init, NULL,
@@ -1317,6 +1347,13 @@ static int espi_npcx_init(const struct device *dev)
 		return -ENODEV;
 	}
 
+#if DT_INST_NODE_HAS_PROP(0, rst_gpios)
+	if (!gpio_is_ready_dt(&config->reset_pin)) {
+		LOG_ERR("eSPI reset pin not ready");
+		return -ENODEV;
+	}
+#endif
+
 	/* Turn on eSPI device clock first */
 	ret = clock_control_on(clk_dev, (clock_control_subsys_t)
 							&config->clk_cfg);
@@ -1339,7 +1376,7 @@ static int espi_npcx_init(const struct device *dev)
 		inst->ESPIWE |= BIT(espi_bus_isr_tbl[i].wake_en_bit);
 	}
 
-#if defined(CONFIG_ESPI_OOB_CHANNEL)
+#if !defined(CONFIG_ESPI_OOB_CHANNEL_RX_ASYNC)
 	k_sem_init(&data->oob_rx_lock, 0, 1);
 #endif
 
