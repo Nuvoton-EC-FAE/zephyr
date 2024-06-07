@@ -117,3 +117,15 @@ properties:
     type: int
     description: |
       mdma channel for I3C module transfer
+
+  maximum-write:
+    type: int
+    default: 4096
+    description: |
+      maximum number of bytes that I3C controller may write to I3C target per message
+
+  maximum-read:
+    type: int
+    default: 4096
+    description: |
+      maximum number of bytes that I3C controller may read from to I3C target per message

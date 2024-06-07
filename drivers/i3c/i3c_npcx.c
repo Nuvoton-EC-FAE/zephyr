@@ -94,6 +94,8 @@ struct npcx_i3c_config {
 	uint8_t  dcr;
 	uint32_t  part_id;
 	uint32_t  vendor_id;
+	uint16_t  max_wr_size;
+	uint16_t  max_rd_size;
 };
 
 struct npcx_i3c_data {
@@ -129,6 +131,9 @@ struct npcx_i3c_data {
 		bool has_mandatory_byte;
 	} ibi;
 #endif
+
+	uint8_t repeat_start;
+	uint8_t write_requested;
 };
 
 static inline uint32_t npcx_i3c_state_get(struct i3c_reg *inst)
@@ -1450,8 +1455,8 @@ static int npcx_i3c_target_config(const struct device *dev)
     SET_FIELD(inst->IDEXT, NPCX_I3C_IDEXT_BCR, config->bcr);
     SET_FIELD(inst->CONFIG, NPCX_I3C_CONFIG_SADDR, config->static_address);
     SET_FIELD(inst->CONFIG, NPCX_I3C_CONFIG_HDRCMD, false);
-    //SET_FIELD(inst->MAXLIMITS, NPCX_I3C_MAXLIMITS_MAXRD, 4096 - 1);
-    //SET_FIELD(inst->MAXLIMITS, NPCX_I3C_MAXLIMITS_MAXWR, 4096 - 1);
+    SET_FIELD(inst->MAXLIMITS, NPCX_I3C_MAXLIMITS_MAXRD, config->max_rd_size - 1);
+    SET_FIELD(inst->MAXLIMITS, NPCX_I3C_MAXLIMITS_MAXWR, config->max_wr_size - 1);
 
     inst->CONFIG &= ~BIT(NPCX_I3C_CONFIG_IDRAND);
     //inst->CONFIG |= BIT(NPCX_I3C_CONFIG_MATCHSS);
@@ -1548,8 +1553,8 @@ static int npcx_i3c_target_ibi_raise(const struct device *dev, struct i3c_ibi *r
 
             k_sem_take(&data->target_event_sem, K_FOREVER);
             inst->CONFIG &= ~BIT(NPCX_I3C_CONFIG_TGTENA);
-			SET_FIELD(inst->CTRL, NPCX_I3C_CTRL_IBIDATA, 0x00);
-			inst->CTRL &= ~BIT(NPCX_I3C_CTRL_EXTDATA);
+			//SET_FIELD(inst->CTRL, NPCX_I3C_CTRL_IBIDATA, 0x00);
+			//inst->CTRL &= ~BIT(NPCX_I3C_CTRL_EXTDATA);
             SET_FIELD(inst->CTRL, NPCX_I3C_CTRL_EVENT, 3);
             inst->CONFIG |= BIT(NPCX_I3C_CONFIG_TGTENA);
             break;
@@ -1585,6 +1590,9 @@ static int npcx_i3c_target_tx_write(const struct device *dev, uint8_t *buf, uint
                     inst->WDATAB = buf[index];
                 }
             }
+			else {
+				break;
+			}
         }
     }
 
@@ -1653,12 +1661,29 @@ static void npcx_i3c_target_isr(const struct device *dev)
 
 		    /* check the IBI was has finished or not -- nacked form host */
 	    	/* config the MDMA for Tx and Rx transfer */
+
+			if(data->repeat_start == 0) {
+				data->repeat_start = 1;
+			}
+			else {
+				//if(data->write_requested == 1) {
+		        //	if ((target_cb != NULL) && (target_cb->write_requested_cb != NULL)) {
+		        //    	target_cb->write_requested_cb(data->target_config);
+	   		    // 	}
+				//}
+		    	if ((target_cb != NULL) && (target_cb->stop_cb != NULL)) {
+			        target_cb->stop_cb(data->target_config);
+		    	}
+			}
+
 			inst->INTSET = BIT(NPCX_I3C_INTSET_START);
 		}
 		else if (IS_BIT_SET(inst->INTMASKED, NPCX_I3C_INTMASKED_MATCHED)) {
+
 			inst->INTCLR = BIT(NPCX_I3C_INTCLR_MATCHED);
 			inst->STATUS = BIT(NPCX_I3C_STATUS_MATCHED);
 
+			data->write_requested = 0;
 		    /* The current bus request is an SDR mode read from this target device */
 		    if(IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_STREQRD))
 		    {
@@ -1674,6 +1699,7 @@ static void npcx_i3c_target_isr(const struct device *dev)
 	    	/* The current bus request is an SDR mode write to this target device */
 	    	else if(IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_STREQWR))
 	    	{
+				//data->write_requested = 1;
 	        	if ((target_cb != NULL) && (target_cb->write_requested_cb != NULL)) {
 	            	target_cb->write_requested_cb(data->target_config);
 	        	}
@@ -1698,14 +1724,14 @@ static void npcx_i3c_target_isr(const struct device *dev)
 			inst->INTCLR = BIT(NPCX_I3C_INTCLR_TXNOTFULL);
 			inst->STATUS = BIT(NPCX_I3C_STATUS_TXNOTFULL);
 
-		    while(!IS_BIT_SET(inst->DATACTRL, NPCX_I3C_DATACTRL_TXFULL)) {
+		    //while(!IS_BIT_SET(inst->DATACTRL, NPCX_I3C_DATACTRL_TXFULL)) {
 		        if ((target_cb != NULL) && (target_cb->read_processed_cb != NULL)) {
 	            	target_cb->read_processed_cb(data->target_config, (uint8_t *) &val);
-	            	inst->WDATAB = val;
+	            	//inst->WDATAB = val;
 	        	}
-			}
+			//}
 
-			//inst->INTSET = BIT(NPCX_I3C_INTSET_TXNOTFULL);
+			inst->INTSET = BIT(NPCX_I3C_INTSET_TXNOTFULL);
 		}
 		else if (IS_BIT_SET(inst->INTMASKED, NPCX_I3C_INTMASKED_CCC)) {
 			inst->INTCLR = BIT(NPCX_I3C_INTCLR_CCC);
@@ -1716,6 +1742,14 @@ static void npcx_i3c_target_isr(const struct device *dev)
 		else if (IS_BIT_SET(inst->INTMASKED, NPCX_I3C_INTMASKED_ERRWARN)) {
 			inst->INTCLR = BIT(NPCX_I3C_INTCLR_ERRWARN);
 			inst->STATUS = BIT(NPCX_I3C_STATUS_ERRWARN);
+
+			/* the transmit FIFO was empty when receiving the address header for read. */
+			if (IS_BIT_SET(inst->ERRWARN, NPCX_I3C_ERRWARN_URUNNACK)) {
+				data->write_requested = 0;
+	        	if((target_cb != NULL) && (target_cb->read_requested_cb != NULL)) {
+	            	target_cb->read_requested_cb(data->target_config, (uint8_t *) &val);
+	        	}
+			}
 
 		    inst->ERRWARN = inst->ERRWARN;
 
@@ -1760,6 +1794,9 @@ static void npcx_i3c_target_isr(const struct device *dev)
 		        target_cb->stop_cb(data->target_config);
 	    	}
 
+			data->repeat_start = 0;
+			data->write_requested = 0;
+
 			inst->INTSET = BIT(NPCX_I3C_INTSET_STOP);
 		}
 		else if (IS_BIT_SET(inst->INTMASKED, NPCX_I3C_INTMASKED_TGTRST)) {
@@ -1767,6 +1804,9 @@ static void npcx_i3c_target_isr(const struct device *dev)
 			inst->STATUS = BIT(NPCX_I3C_STATUS_TGTRST);
 
 			inst->INTSET = BIT(NPCX_I3C_INTSET_TGTRST);
+
+			data->repeat_start = 0;
+			data->write_requested = 0;
 		}
 	}
 }
@@ -2163,6 +2203,8 @@ static const struct i3c_driver_api npcx_i3c_driver_api = {
 		.vendor_id = DT_INST_PROP_OR(id, vendor_id, 0),                                    \
 		.bcr = DT_INST_PROP_OR(id, bcr, 0),                                                \
 		.dcr = DT_INST_PROP_OR(id, dcr, 0),                                                \
+		.max_wr_size = DT_INST_PROP_OR(id, maximum_write, 0),                              \
+		.max_rd_size = DT_INST_PROP_OR(id, maximum_read, 0),                              \
 	};                                                                                         \
 	static struct npcx_i3c_data npcx_i3c_data_##id = {                                         \
 		.common.ctrl_config.scl.i3c = DT_INST_PROP_OR(id, i3c_scl_hz, 0),                  \

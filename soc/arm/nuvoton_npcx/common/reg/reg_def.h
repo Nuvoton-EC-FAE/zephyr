@@ -1988,6 +1988,10 @@ enum npcx_i3c_mctrl_type {
 	NPCX_I3C_MCTRL_TYPE_I3C_HDR_DDR,
 };
 
+/* For REQUEST = ForceExit/Target Reset */
+#define MCTRL_TYPE_HDR_EXIT    0
+#define MCTRL_TYPE_TGT_RESTART 2
+
 /* Controller Status Register (MSTATUS) */
 #define MSTATUS_STATE_IDLE    0x0
 #define MSTATUS_STATE_TGTREQ  0x1

@@ -106,7 +106,9 @@ struct npcx_clk_cfg {
 #endif /* CONFIG_CLOCK_CONTROL_NPCX_SUPP_FIU1 */
 
 /* I3C clock divider */
-#if (MHZ(80) <= OFMCLK) /* MCLAD must between 40 mhz to 50 mhz*/
+#if (MHZ(120) <= OFMCLK) /* MCLAD must between 40 mhz to 50 mhz*/
+#define MCLKD_SL 2    /* I3C_CLK = (MCLK / 3) */
+#elif (MHZ(80) <= OFMCLK) /* MCLAD must between 40 mhz to 50 mhz*/
 #define MCLKD_SL 1    /* I3C_CLK = (MCLK / 2) */
 #else
 #define MCLKD_SL 0    /* I3C_CLK = MCLK */
@@ -167,7 +169,7 @@ struct npcx_clk_cfg {
 #define VAL_HFCBCD2 APB3DIV_VAL
 #endif /* APB4DIV_VAL */
 /* I3C1~I3C3 share the same configuration */
-#define VAL_HFCBCD3 ((MCLKD_SL << 2) | (MCLKD_SL << 1) | MCLKD_SL)
+#define VAL_HFCBCD3 (MCLKD_SL)
 
 /**
  * @brief Function to notify clock driver that backup the counter value of
