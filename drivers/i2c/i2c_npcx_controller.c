@@ -113,7 +113,14 @@ enum npcx_i2c_freq {
 };
 
 enum npcx_i2c_flag {
-	NPCX_I2C_FLAG_TARGET,
+	NPCX_I2C_FLAG_TARGET1,
+	NPCX_I2C_FLAG_TARGET2,
+	NPCX_I2C_FLAG_TARGET3,
+	NPCX_I2C_FLAG_TARGET4,
+	NPCX_I2C_FLAG_TARGET5,
+	NPCX_I2C_FLAG_TARGET6,
+	NPCX_I2C_FLAG_TARGET7,
+	NPCX_I2C_FLAG_TARGET8,
 	NPCX_I2C_FLAG_COUNT,
 };
 
@@ -162,7 +169,8 @@ struct i2c_ctrl_data {
 	bool is_configured; /* is port configured? */
 	const struct npcx_i2c_timing_cfg *ptr_speed_confs;
 #ifdef CONFIG_I2C_TARGET
-	struct i2c_target_config *target_cfg;
+	struct i2c_target_config *target_cfg[NPCX_I2C_FLAG_COUNT];
+    uint8_t target_idx;
 	atomic_t flags;
 #endif
 };
@@ -753,17 +761,20 @@ static void i2c_ctrl_target_isr(const struct device *dev, uint8_t status)
 {
 	struct smb_reg *const inst = HAL_I2C_INSTANCE(dev);
 	struct i2c_ctrl_data *const data = dev->data;
-	const struct i2c_target_callbacks *target_cb = data->target_cfg->callbacks;
+	const struct i2c_target_callbacks *target_cb = NULL;// = data->target_cfg->callbacks;
 	uint8_t val = 0;
+	uint8_t addr_idx;
 
 	/* A 'Bus Error' has been identified */
 	if (IS_BIT_SET(status, NPCX_SMBST_BER)) {
 		/* Clear BER Bit */
 		inst->SMBST = BIT(NPCX_SMBST_BER);
 
+        target_cb = data->target_cfg[data->target_idx]->callbacks;
+
 		/* Notify upper layer the end of transaction */
 		if (target_cb->stop) {
-			target_cb->stop(data->target_cfg);
+			target_cb->stop(data->target_cfg[data->target_idx]);
 		}
 
 		/* Reset i2c module in target mode */
@@ -789,8 +800,9 @@ static void i2c_ctrl_target_isr(const struct device *dev, uint8_t status)
 		/* End of transaction */
 		data->oper_state = NPCX_I2C_IDLE;
 		/* Notify upper layer a STOP condition received */
+        target_cb = data->target_cfg[data->target_idx]->callbacks;
 		if (target_cb->stop) {
-			target_cb->stop(data->target_cfg);
+			target_cb->stop(data->target_cfg[data->target_idx]);
 		}
 		return;
 	}
@@ -808,13 +820,30 @@ static void i2c_ctrl_target_isr(const struct device *dev, uint8_t status)
 		/* Clear NMATCH Bit */
 		inst->SMBST = BIT(NPCX_SMBST_NMATCH);
 
+		if(inst->SMBCST2 & ~BIT(NPCX_SMBCST2_INTSTS))
+		{
+			for(addr_idx = NPCX_SMBCST2_MATCHA1F; addr_idx <= NPCX_SMBCST2_MATCHA7F; addr_idx++)
+			{
+	        	if(inst->SMBCST2 & BIT(addr_idx))
+    	    	{
+	        	    data->target_idx = addr_idx;
+        		}
+			}
+		}
+        else if(inst->SMBCST3 & BIT(NPCX_SMBCST3_MATCHA8F))
+        {
+            data->target_idx = 7;
+        }
+
+        target_cb = data->target_cfg[data->target_idx]->callbacks;
+
 		/* Distinguish the direction of i2c target mode by reading XMIT bit */
 		if (IS_BIT_SET(inst->SMBST, NPCX_SMBST_XMIT)) {
 			/* Start transmitting data in i2c target mode */
 			data->oper_state = NPCX_I2C_WRITE_FIFO;
 			/* Write first requested byte after repeated start */
 			if (target_cb->read_requested) {
-				target_cb->read_requested(data->target_cfg, &val);
+				target_cb->read_requested(data->target_cfg[data->target_idx], &val);
 			}
 			inst->SMBSDA = val;
 		} else {
@@ -822,7 +851,7 @@ static void i2c_ctrl_target_isr(const struct device *dev, uint8_t status)
 			data->oper_state = NPCX_I2C_READ_FIFO;
 
 			if (target_cb->write_requested) {
-				target_cb->write_requested(data->target_cfg);
+				target_cb->write_requested(data->target_cfg[data->target_idx]);
 			}
 		}
 		return;
@@ -830,17 +859,19 @@ static void i2c_ctrl_target_isr(const struct device *dev, uint8_t status)
 
 	/* Tx byte empty or Rx byte full has occurred */
 	if (IS_BIT_SET(status, NPCX_SMBST_SDAST)) {
+        target_cb = data->target_cfg[data->target_idx]->callbacks;
+
 		if (data->oper_state == NPCX_I2C_WRITE_FIFO) {
 			/* Notify upper layer one byte will be transmitted */
 			if (target_cb->read_processed) {
-				target_cb->read_processed(data->target_cfg, &val);
+				target_cb->read_processed(data->target_cfg[data->target_idx], &val);
 			}
 			inst->SMBSDA = val;
 		} else if (data->oper_state == NPCX_I2C_READ_FIFO) {
 			if (target_cb->write_received) {
 				val = inst->SMBSDA;
 				/* Notify upper layer one byte received */
-				target_cb->write_received(data->target_cfg, val);
+				target_cb->write_received(data->target_cfg[data->target_idx], val);
 			}
 		} else {
 			LOG_ERR("Unexpected oper state %d on i2c target port%02x!",
@@ -869,7 +900,8 @@ static void i2c_ctrl_isr(const struct device *dev)
 	LOG_DBG("status: %02x, %d", status, data->oper_state);
 
 #ifdef CONFIG_I2C_TARGET
-	if (atomic_test_bit(&data->flags, NPCX_I2C_FLAG_TARGET)) {
+	//if (atomic_test_bit(&data->flags, NPCX_I2C_FLAG_TARGET)) {
+	if (atomic_get(&data->flags) != (atomic_val_t) 0) {
 		return i2c_ctrl_target_isr(dev, status);
 	}
 #endif
@@ -1075,17 +1107,16 @@ int npcx_i2c_ctrl_target_register(const struct device *i2c_dev,
 	uint8_t addr = BIT(NPCX_SMBADDR1_SAEN) | target_cfg->address;
 
 	/* I2c module has been configured to target mode */
-	if (atomic_test_and_set_bit(&data->flags, NPCX_I2C_FLAG_TARGET)) {
+	//if (atomic_test_and_set_bit(&data->flags, NPCX_I2C_FLAG_TARGET)) {
+	if (atomic_get(&data->flags) >= (atomic_val_t) NPCX_I2C_FLAG_COUNT) {
 		return -EBUSY;
 	}
 
 	/* A transiaction is ongoing */
 	if (data->oper_state != NPCX_I2C_IDLE) {
-		atomic_clear_bit(&data->flags, NPCX_I2C_FLAG_TARGET);
+	//	atomic_clear_bit(&data->flags, NPCX_I2C_FLAG_TARGET);
 		return -EBUSY;
 	}
-
-	data->target_cfg = target_cfg;
 
 	i2c_ctrl_irq_enable(i2c_dev, 0);
 	/* Switch correct port for i2c controller first */
@@ -1097,7 +1128,55 @@ int npcx_i2c_ctrl_target_register(const struct device *i2c_dev,
 	/* Select normal bank and single byte mode for i2c target mode */
 	i2c_ctrl_bank_sel(i2c_dev, NPCX_I2C_BANK_NORMAL);
 	inst->SMBFIF_CTL &= ~BIT(NPCX_SMBFIF_CTL_FIFO_EN);
-	inst->SMBADDR1 = addr; /* Enable target mode and configure its address */
+
+    if((inst->SMBADDR1 & BIT(NPCX_SMBADDR1_SAEN)) == 0)
+    {
+        inst->SMBADDR1 = addr; /* Enable target mode and configure its address */
+        data->target_cfg[NPCX_I2C_FLAG_TARGET1] = target_cfg;
+		atomic_set_bit(&data->flags, NPCX_I2C_FLAG_TARGET1);
+    }
+    else if((inst->SMBADDR2 & BIT(NPCX_SMBADDR2_SAEN)) == 0)
+    {
+        inst->SMBADDR2 = addr; /* Enable target mode and configure its address */
+        data->target_cfg[NPCX_I2C_FLAG_TARGET2] = target_cfg;
+		atomic_set_bit(&data->flags, NPCX_I2C_FLAG_TARGET2);
+    }
+    else if((inst->SMBADDR3 & BIT(NPCX_SMBADDR3_SAEN)) == 0)
+    {
+        inst->SMBADDR3 = addr; /* Enable target mode and configure its address */
+        data->target_cfg[NPCX_I2C_FLAG_TARGET3] = target_cfg;
+		atomic_set_bit(&data->flags, NPCX_I2C_FLAG_TARGET3);
+    }
+    else if((inst->SMBADDR4 & BIT(NPCX_SMBADDR4_SAEN)) == 0)
+    {
+        inst->SMBADDR4 = addr; /* Enable target mode and configure its address */
+        data->target_cfg[NPCX_I2C_FLAG_TARGET4] = target_cfg;
+		atomic_set_bit(&data->flags, NPCX_I2C_FLAG_TARGET4);
+    }
+    else if((inst->SMBADDR5 & BIT(NPCX_SMBADDR5_SAEN)) == 0)
+    {
+        inst->SMBADDR5 = addr; /* Enable target mode and configure its address */
+        data->target_cfg[NPCX_I2C_FLAG_TARGET5] = target_cfg;
+		atomic_set_bit(&data->flags, NPCX_I2C_FLAG_TARGET5);
+    }
+    else if((inst->SMBADDR6 & BIT(NPCX_SMBADDR6_SAEN)) == 0)
+    {
+        inst->SMBADDR6 = addr; /* Enable target mode and configure its address */
+        data->target_cfg[NPCX_I2C_FLAG_TARGET6] = target_cfg;
+		atomic_set_bit(&data->flags, NPCX_I2C_FLAG_TARGET6);
+    }
+    else if((inst->SMBADDR7 & BIT(NPCX_SMBADDR7_SAEN)) == 0)
+    {
+        inst->SMBADDR7 = addr; /* Enable target mode and configure its address */
+        data->target_cfg[NPCX_I2C_FLAG_TARGET7] = target_cfg;
+		atomic_set_bit(&data->flags, NPCX_I2C_FLAG_TARGET7);
+    }
+    else if((inst->SMBADDR8 & BIT(NPCX_SMBADDR8_SAEN)) == 0)
+    {
+        inst->SMBADDR8 = addr; /* Enable target mode and configure its address */
+        data->target_cfg[NPCX_I2C_FLAG_TARGET8] = target_cfg;
+		atomic_set_bit(&data->flags, NPCX_I2C_FLAG_TARGET8);
+    }
 
 	/* Reconfigure SMBCTL1 */
 	inst->SMBCTL1 |= BIT(NPCX_SMBCTL1_NMINTE) | BIT(NPCX_SMBCTL1_INTEN);
@@ -1111,9 +1190,11 @@ int npcx_i2c_ctrl_target_unregister(const struct device *i2c_dev,
 {
 	struct smb_reg *const inst = HAL_I2C_INSTANCE(i2c_dev);
 	struct i2c_ctrl_data *const data = i2c_dev->data;
+    uint8_t addr = BIT(NPCX_SMBADDR1_SAEN) | target_cfg->address;
 
 	/* No I2c module has been configured to target mode */
-	if (!atomic_test_bit(&data->flags, NPCX_I2C_FLAG_TARGET)) {
+	//if (!atomic_test_bit(&data->flags, NPCX_I2C_FLAG_TARGET)) {
+	if (atomic_get(&data->flags) == (atomic_val_t) 0) {
 		return -EINVAL;
 	}
 
@@ -1121,14 +1202,61 @@ int npcx_i2c_ctrl_target_unregister(const struct device *i2c_dev,
 	if (data->oper_state != NPCX_I2C_IDLE) {
 		return -EBUSY;
 	}
-	data->target_cfg = NULL;
 
 	i2c_ctrl_irq_enable(i2c_dev, 0);
 	/* Reset I2C module */
 	inst->SMBCTL2 &= ~BIT(NPCX_SMBCTL2_ENABLE);
 	inst->SMBCTL2 |= BIT(NPCX_SMBCTL2_ENABLE);
 
-	inst->SMBADDR1 = 0; /* Disable target mode and clear address setting */
+    if(inst->SMBADDR1 == addr)
+    {
+        inst->SMBADDR1 = 0; /* Disable target mode and clear address setting */
+        data->target_cfg[NPCX_I2C_FLAG_TARGET1] = NULL;
+		atomic_clear_bit(&data->flags, NPCX_I2C_FLAG_TARGET1);
+    }
+    else if(inst->SMBADDR2 == addr)
+    {
+        inst->SMBADDR2 = 0; /* Disable target mode and clear address setting */
+        data->target_cfg[NPCX_I2C_FLAG_TARGET2] = NULL;
+		atomic_clear_bit(&data->flags, NPCX_I2C_FLAG_TARGET2);
+    }
+    else if(inst->SMBADDR3 == addr)
+    {
+        inst->SMBADDR3 = 0; /* Disable target mode and clear address setting */
+        data->target_cfg[NPCX_I2C_FLAG_TARGET3] = NULL;
+		atomic_clear_bit(&data->flags, NPCX_I2C_FLAG_TARGET3);
+	}
+    else if(inst->SMBADDR4 == addr)
+    {
+        inst->SMBADDR4 = 0; /* Disable target mode and clear address setting */
+        data->target_cfg[NPCX_I2C_FLAG_TARGET4] = NULL;
+		atomic_clear_bit(&data->flags, NPCX_I2C_FLAG_TARGET4);
+    }
+    else if(inst->SMBADDR5 == addr)
+    {
+        inst->SMBADDR5 = 0; /* Disable target mode and clear address setting */
+        data->target_cfg[NPCX_I2C_FLAG_TARGET5] = NULL;
+		atomic_clear_bit(&data->flags, NPCX_I2C_FLAG_TARGET5);
+    }
+    else if(inst->SMBADDR6 == addr)
+    {
+        inst->SMBADDR6 = 0; /* Disable target mode and clear address setting */
+        data->target_cfg[NPCX_I2C_FLAG_TARGET6] = NULL;
+		atomic_clear_bit(&data->flags, NPCX_I2C_FLAG_TARGET6);
+    }
+    else if(inst->SMBADDR7 == addr)
+    {
+        inst->SMBADDR7 = 0; /* Disable target mode and clear address setting */
+        data->target_cfg[NPCX_I2C_FLAG_TARGET7] = NULL;
+		atomic_clear_bit(&data->flags, NPCX_I2C_FLAG_TARGET7);
+    }
+    else if(inst->SMBADDR8 == addr)
+    {
+        inst->SMBADDR8 = 0; /* Disable target mode and clear address setting */
+        data->target_cfg[NPCX_I2C_FLAG_TARGET8] = NULL;
+		atomic_clear_bit(&data->flags, NPCX_I2C_FLAG_TARGET8);
+    }
+
 	/* Enable FIFO mode and select to FIFO bank for i2c controller mode */
 	inst->SMBFIF_CTL |= BIT(NPCX_SMBFIF_CTL_FIFO_EN);
 	i2c_ctrl_bank_sel(i2c_dev, NPCX_I2C_BANK_FIFO);
@@ -1138,7 +1266,7 @@ int npcx_i2c_ctrl_target_unregister(const struct device *i2c_dev,
 	i2c_ctrl_irq_enable(i2c_dev, 1);
 
 	/* Mark it as controller mode */
-	atomic_clear_bit(&data->flags, NPCX_I2C_FLAG_TARGET);
+	//atomic_clear_bit(&data->flags, NPCX_I2C_FLAG_TARGET);
 
 	return 0;
 }
@@ -1153,7 +1281,8 @@ int npcx_i2c_ctrl_transfer(const struct device *i2c_dev, struct i2c_msg *msgs,
 
 #ifdef CONFIG_I2C_TARGET
 	/* I2c module has been configured to target mode */
-	if (atomic_test_bit(&data->flags, NPCX_I2C_FLAG_TARGET)) {
+	//if (atomic_test_bit(&data->flags, NPCX_I2C_FLAG_TARGET)) {
+	if (atomic_get(&data->flags) != (atomic_val_t) 0) {
 		return -EBUSY;
 	}
 #endif
