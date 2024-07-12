@@ -1246,6 +1246,9 @@ struct smb_reg {
 #define NPCX_SMBFIF_CTS_CLR_FIFO         6
 #define NPCX_SMBFIF_CTL_FIFO_EN          4
 #define NPCX_SMBRXF_STS_RX_THST          6
+#define NPCX_SMBT_OUT_TO_CKDIV_FIELD     FIELD(0, 6)
+#define NPCX_SMBT_OUT_T_OUTIE			 6
+#define NPCX_SMBT_OUT_T_OUTST			 7
 
 /* RX FIFO threshold */
 #define NPCX_SMBRXF_CTL_RX_THR           FIELD(0, 6)

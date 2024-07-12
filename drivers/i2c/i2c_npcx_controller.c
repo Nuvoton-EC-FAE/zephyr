@@ -171,6 +171,8 @@ struct i2c_ctrl_data {
 #ifdef CONFIG_I2C_TARGET
 	struct i2c_target_config *target_cfg[NPCX_I2C_FLAG_COUNT];
     uint8_t target_idx;
+	struct k_work_delayable     timeout_work;
+	uintptr_t base; /* i2c controller base address */
 	atomic_t flags;
 #endif
 };
@@ -757,6 +759,35 @@ static int i2c_ctrl_proc_read_msg(const struct device *dev, struct i2c_msg *msg)
 
 /* I2C controller isr function */
 #ifdef CONFIG_I2C_TARGET
+
+static void i2c_ctrl_target_timeout(struct k_work *work)
+{
+	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+	struct i2c_ctrl_data *const data = CONTAINER_OF(dwork, struct i2c_ctrl_data, timeout_work);
+	struct smb_reg *const inst = (struct smb_reg *) data->base;
+
+	if(!(inst->SMBCTL3 & BIT(NPCX_SMBCTL3_SDA_LVL)) || !(inst->SMBCTL3 & BIT(NPCX_SMBCTL3_SCL_LVL))) {
+		k_work_reschedule(&data->timeout_work, K_MSEC(1));
+	}
+	else {
+		LOG_DBG("SMBus released from bus stall state.");
+
+		/* Reset i2c module in target mode */
+		inst->SMBCTL2 &= ~BIT(NPCX_SMBCTL2_ENABLE);
+		inst->SMBCTL2 |= BIT(NPCX_SMBCTL2_ENABLE);
+
+		/*
+		 * Re-enable interrupts because they are turned off after the SMBus module
+		 * is reset above.
+		 */
+		inst->SMBT_OUT |= BIT(NPCX_SMBT_OUT_T_OUTIE) | BIT(NPCX_SMBT_OUT_T_OUTST);
+		inst->SMBCTL1 |= BIT(NPCX_SMBCTL1_NMINTE) | BIT(NPCX_SMBCTL1_INTEN);
+
+		/* End of transaction */
+		data->oper_state = NPCX_I2C_IDLE;
+	}
+}
+
 static void i2c_ctrl_target_isr(const struct device *dev, uint8_t status)
 {
 	struct smb_reg *const inst = HAL_I2C_INSTANCE(dev);
@@ -766,6 +797,19 @@ static void i2c_ctrl_target_isr(const struct device *dev, uint8_t status)
 	uint8_t addr_idx;
 
 	/* A 'Bus Error' has been identified */
+
+	if(IS_BIT_SET(inst->SMBT_OUT, NPCX_SMBT_OUT_T_OUTST)) {
+		LOG_DBG("SMBus %s timeout occured.", dev->name);
+
+		inst->SMBT_OUT |= BIT(NPCX_SMBT_OUT_T_OUTST);
+		inst->SMBT_OUT &= ~BIT(NPCX_SMBT_OUT_T_OUTIE);
+
+	    k_work_reschedule(&data->timeout_work, K_MSEC(1));
+
+		inst->SMBCTL2 &= ~BIT(NPCX_SMBCTL2_ENABLE);
+		data->oper_state = NPCX_I2C_IDLE;
+	}
+
 	if (IS_BIT_SET(status, NPCX_SMBST_BER)) {
 		/* Clear BER Bit */
 		inst->SMBST = BIT(NPCX_SMBST_BER);
@@ -1179,6 +1223,7 @@ int npcx_i2c_ctrl_target_register(const struct device *i2c_dev,
     }
 
 	/* Reconfigure SMBCTL1 */
+	inst->SMBT_OUT |= BIT(NPCX_SMBT_OUT_T_OUTIE) | BIT(NPCX_SMBT_OUT_T_OUTST);
 	inst->SMBCTL1 |= BIT(NPCX_SMBCTL1_NMINTE) | BIT(NPCX_SMBCTL1_INTEN);
 	i2c_ctrl_irq_enable(i2c_dev, 1);
 
@@ -1262,6 +1307,7 @@ int npcx_i2c_ctrl_target_unregister(const struct device *i2c_dev,
 	i2c_ctrl_bank_sel(i2c_dev, NPCX_I2C_BANK_FIFO);
 
 	/* Reconfigure SMBCTL1 */
+	inst->SMBT_OUT |= BIT(NPCX_SMBT_OUT_T_OUTIE) | BIT(NPCX_SMBT_OUT_T_OUTST);
 	inst->SMBCTL1 |= BIT(NPCX_SMBCTL1_NMINTE) | BIT(NPCX_SMBCTL1_INTEN);
 	i2c_ctrl_irq_enable(i2c_dev, 1);
 
@@ -1374,6 +1420,8 @@ static int i2c_ctrl_init(const struct device *dev)
 	struct i2c_ctrl_data *const data = dev->data;
 	const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
 	uint32_t i2c_rate;
+	struct smb_reg *const inst = HAL_I2C_INSTANCE(dev);
+	uint8_t to_ckdiv;
 
 	if (!device_is_ready(clk_dev)) {
 		LOG_ERR("clock control device not ready");
@@ -1407,12 +1455,27 @@ static int i2c_ctrl_init(const struct device *dev)
 		return -EIO;
 	}
 
+	to_ckdiv = (uint8_t) ((i2c_rate / 1000) / 1000);
+	if(to_ckdiv > 3) 
+	{
+		inst->SMBT_OUT = to_ckdiv - 1;
+	}
+	else
+	{
+		inst->SMBT_OUT = 3;
+	}
+
 	/* Initialize i2c module */
 	i2c_ctrl_init_module(dev);
 
 	/* initialize mutex and semaphore for i2c/smb controller */
 	k_sem_init(&data->lock_sem, 1, 1);
 	k_sem_init(&data->sync_sem, 0, K_SEM_MAX_LIMIT);
+
+#ifdef CONFIG_I2C_TARGET
+	data->base = config->base;
+    k_work_init_delayable(&data->timeout_work, i2c_ctrl_target_timeout);
+#endif
 
 	/* Initialize driver status machine */
 	data->oper_state = NPCX_I2C_IDLE;
