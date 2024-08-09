@@ -47,3 +47,11 @@ properties:
       - "NPCX_RD_MODE_NORMAL" # Direct read access by command code 03h
       - "NPCX_RD_MODE_FAST" # Direct read access by command code 0bh
       - "NPCX_RD_MODE_FAST_DUAL" # Direct read access by command code bbh
+
+  erase-block-size:
+    type: int
+    description: address alignment required by flash erase operations
+
+  write-block-size:
+    type: int
+    description: address alignment required by flash write operations
