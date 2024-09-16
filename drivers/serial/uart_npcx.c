@@ -571,7 +571,7 @@ static int uart_npcx_init(const struct device *dev)
 	static const struct uart_npcx_config uart_npcx_cfg_##i = {                              \
 		.inst = (struct uart_reg *)DT_INST_REG_ADDR(i),                                 \
 		.clk_cfg = NPCX_DT_CLK_CFG_ITEM(i),                                             \
-		.uart_rx_wui = NPCX_DT_WUI_ITEM_BY_NAME(0, uart_rx),                            \
+		.uart_rx_wui = NPCX_DT_WUI_ITEM_BY_NAME(i, uart_rx),                            \
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(i),                                      \
 		NPCX_UART_IRQ_CONFIG_FUNC_INIT(i)                                               \
 	};                                                                                      \
