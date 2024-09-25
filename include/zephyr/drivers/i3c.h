@@ -11,6 +11,8 @@
 /**
  * @brief I3C Interface
  * @defgroup i3c_interface I3C Interface
+ * @since 3.2
+ * @version 0.1.0
  * @ingroup io_interfaces
  * @{
  */
@@ -496,6 +498,9 @@ struct i3c_msg {
 	 * Use SDR mode if none is set.
 	 */
 	uint8_t			hdr_mode;
+
+	/** HDR command code field (7-bit) for HDR-DDR, HDR-TSP and HDR-TSL */
+	uint8_t			hdr_cmd_code;
 };
 
 /** @} */
@@ -1037,6 +1042,58 @@ struct i3c_device_desc {
 		/** Maximum IBI Payload Size. Valid only if BCR[2] is 1. */
 		uint8_t max_ibi;
 	} data_length;
+
+	/** Describes advanced (Target) capabilities and features */
+	struct {
+		union {
+			/**
+			 * I3C v1.0 HDR Capabilities (@c I3C_CCC_GETCAPS1_*)
+			 * - Bit[0]: HDR-DDR
+			 * - Bit[1]: HDR-TSP
+			 * - Bit[2]: HDR-TSL
+			 * - Bit[7:3]: Reserved
+			 */
+			uint8_t gethdrcap;
+
+			/**
+			 * I3C v1.1+ GETCAPS1 (@c I3C_CCC_GETCAPS1_*)
+			 * - Bit[0]: HDR-DDR
+			 * - Bit[1]: HDR-TSP
+			 * - Bit[2]: HDR-TSL
+			 * - Bit[3]: HDR-BT
+			 * - Bit[7:4]: Reserved
+			 */
+			uint8_t getcap1;
+		};
+
+		/**
+		 *  GETCAPS2 (@c I3C_CCC_GETCAPS2_*)
+		 * - Bit[3:0]: I3C 1.x Specification Version
+		 * - Bit[5:4]: Group Address Capabilities
+		 * - Bit[6]: HDR-DDR Write Abort
+		 * - Bit[7]: HDR-DDR Abort CRC
+		 */
+		uint8_t getcap2;
+
+		/**
+		 * GETCAPS3 (@c I3C_CCC_GETCAPS3_*)
+		 * - Bit[0]: Multi-Lane (ML) Data Transfer Support
+		 * - Bit[1]: Device to Device Transfer (D2DXFER) Support
+		 * - Bit[2]: Device to Device Transfer (D2DXFER) IBI Capable
+		 * - Bit[3]: Defining Byte Support in GETCAPS
+		 * - Bit[4]: Defining Byte Support in GETSTATUS
+		 * - Bit[5]: HDR-BT CRC-32 Support
+		 * - Bit[6]: IBI MDB Support for Pending Read Notification
+		 * - Bit[7]: Reserved
+		 */
+		uint8_t getcap3;
+
+		/**
+		 * GETCAPS4
+		 * - Bit[7:0]: Reserved
+		 */
+		uint8_t getcap4;
+	} getcaps;
 
 	/**
 	 * Private data by the controller to aid in transactions. Do not modify.
@@ -1773,6 +1830,7 @@ static inline int i3c_write(struct i3c_device_desc *target,
 	msg.buf = (uint8_t *)buf;
 	msg.len = num_bytes;
 	msg.flags = I3C_MSG_WRITE | I3C_MSG_STOP;
+	msg.hdr_cmd_code = 0;
 
 	return i3c_transfer(target, &msg, 1);
 }
@@ -1798,6 +1856,7 @@ static inline int i3c_read(struct i3c_device_desc *target,
 	msg.buf = buf;
 	msg.len = num_bytes;
 	msg.flags = I3C_MSG_READ | I3C_MSG_STOP;
+	msg.hdr_cmd_code = 0;
 
 	return i3c_transfer(target, &msg, 1);
 }
@@ -1828,10 +1887,12 @@ static inline int i3c_write_read(struct i3c_device_desc *target,
 	msg[0].buf = (uint8_t *)write_buf;
 	msg[0].len = num_write;
 	msg[0].flags = I3C_MSG_WRITE;
+	msg[0].hdr_cmd_code = 0;
 
 	msg[1].buf = (uint8_t *)read_buf;
 	msg[1].len = num_read;
 	msg[1].flags = I3C_MSG_RESTART | I3C_MSG_READ | I3C_MSG_STOP;
+	msg[1].hdr_cmd_code = 0;
 
 	return i3c_transfer(target, msg, 2);
 }
@@ -1893,10 +1954,12 @@ static inline int i3c_burst_write(struct i3c_device_desc *target,
 	msg[0].buf = &start_addr;
 	msg[0].len = 1U;
 	msg[0].flags = I3C_MSG_WRITE;
+	msg[0].hdr_cmd_code = 0;
 
 	msg[1].buf = (uint8_t *)buf;
 	msg[1].len = num_bytes;
 	msg[1].flags = I3C_MSG_WRITE | I3C_MSG_STOP;
+	msg[1].hdr_cmd_code = 0;
 
 	return i3c_transfer(target, msg, 2);
 }

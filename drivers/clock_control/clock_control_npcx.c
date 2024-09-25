@@ -188,15 +188,12 @@ BUILD_ASSERT(APBSRC_CLK / (APB4DIV_VAL + 1) <= MAX_OFMCLK &&
 	     (APB4DIV_VAL + 1) % (FPRED_VAL + 1) == 0,
 	     "Invalid APB4_CLK setting");
 #endif
-#if defined(FIU1DIV_VAL)
-BUILD_ASSERT(CORE_CLK / (FIU1DIV_VAL + 1) <= (MAX_OFMCLK / 2) &&
-	     CORE_CLK / (FIU1DIV_VAL + 1) >= MHZ(4),
-	     "Invalid FIU1CLK setting");
-#endif
-#if defined(CONFIG_NPCX_I3C)
+#if defined(CONFIG_I3C_NPCX)
 BUILD_ASSERT(OFMCLK / (MCLKD_SL + 1) <= MHZ(50) &&
 	     OFMCLK / (MCLKD_SL + 1) >= MHZ(40),
 	     "Invalid MCLKD_SL setting");
+BUILD_ASSERT(APBSRC_CLK / (APB4DIV_VAL + 1) >= MHZ(20),
+	     "Invalid PDMA CLK setting");
 #endif
 
 static int npcx_clock_control_init(const struct device *dev)

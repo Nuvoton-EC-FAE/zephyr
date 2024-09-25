@@ -250,6 +250,14 @@ struct scfg_reg {
 #define NPCX_LV_GPIO_CTL(base, n) \
 	(*(volatile uint8_t *)(base + NPCX_LV_GPIO_CTL_OFFSET(n)))
 
+#define NPCX_JEN_CTL1_OFFSET 0x120
+#define NPCX_JEN_CTL1(base) (*(volatile uint8_t *)(base + (NPCX_JEN_CTL1_OFFSET)))
+
+#define NPCX_JEN_CTL1_JEN_EN       FIELD(0, 4)
+#define NPCX_JEN_CTL1_JEN_HEN      FIELD(4, 4)
+#define NPCX_JEN_CTL1_JEN_ENABLE   0x9
+#define NPCX_JEN_CTL1_JEN_DISABLE  0x6
+
 /* SCFG register fields */
 #define NPCX_DEVCNT_F_SPI_TRIS                6
 #define NPCX_DEVCNT_HIF_TYP_SEL_FIELD         FIELD(2, 2)
@@ -389,6 +397,9 @@ struct uart_reg {
 #define NPCX_UFRS_PSEL_FIELD                  FIELD(4, 2)
 #define NPCX_UFRS_PEN                         6
 #define NPCX_UMDSL_FIFO_MD                    0
+#define NPCX_UMDSL_ETD                        4
+#define NPCX_UMDSL_ERD                        5
+
 #define NPCX_UFTSTS_TEMPTY_LVL                FIELD(0, 5)
 #define NPCX_UFTSTS_TEMPTY_LVL_STS            5
 #define NPCX_UFTSTS_TFIFO_EMPTY_STS           6
@@ -420,6 +431,8 @@ struct uart_reg {
 	(*(volatile uint8_t *)(base + NPCX_WKINEN_OFFSET(group)))
 #define NPCX_WKMOD(base, group) \
 	(*(volatile uint8_t *)(base + NPCX_WKMOD_OFFSET(group)))
+#define NPCX_WKST(base, group) \
+	(*(volatile uint8_t *)(base + NPCX_WKST_OFFSET(group)))
 
 /*
  * General-Purpose I/O (GPIO) device registers
@@ -1752,6 +1765,34 @@ struct shi_reg {
 
 #define IBF_IBHF_EN_MASK                 (BIT(NPCX_EVENABLE_IBFEN) | BIT(NPCX_EVENABLE_IBHFEN))
 
+/* SPIP (SPI Peripheral Interface) registers */
+struct spip_reg {
+	/* 0x000: SPIP Data In/Out */
+	volatile uint16_t SPIP_DATA;
+	/* 0x002: SPIP Control 1 */
+	volatile uint16_t SPIP_CTL1;
+	/* 0x004: SPIP Status */
+	volatile uint8_t SPIP_STAT;
+	volatile uint8_t reserved1;
+};
+
+#define NPCX_SPIP_CTL1_SPIEN            0
+#define NPCX_SPIP_CTL1_MOD              2
+#define NPCX_SPIP_CTL1_EIR              5
+#define NPCX_SPIP_CTL1_EIW              6
+#define NPCX_SPIP_CTL1_SCM              7
+#define NPCX_SPIP_CTL1_SCIDL            8
+#define NPCX_SPIP_CTL1_SCDV             FIELD(9, 7)
+#define NPCX_SPIP_STAT_BSY              0
+#define NPCX_SPIP_STAT_RBF              1
+
+/* Software-triggered Pheripheral Reset Controller Register */
+struct swrst_reg {
+	/* 0x000: Software Reset Trigger */
+	volatile uint16_t SWRST_TRG;
+	volatile uint8_t reserved1[2];
+	volatile uint32_t SWRST_CTL[4];
+};
 
 /* Improved Inter Integrated Circuit  (I3C) device registers */
 struct i3c_reg {
@@ -1962,14 +2003,17 @@ struct i3c_reg {
 #define NPCX_I3C_MERRWARN_MSGERR   18
 #define NPCX_I3C_MERRWARN_INVERQ   19
 #define NPCX_I3C_MERRWARN_TIMEOUT  20
+#define NPCX_I3C_MDMACTRL_DMAFB    FIELD(0, 2)
+#define NPCX_I3C_MDMACTRL_DMATB    FIELD(2, 2)
 
-/* Controller Configuration Register(MCONFIG) */
+
+/* MCONFIG options */
 #define MCONFIG_CTRENA_OFF        0x0
 #define MCONFIG_CTRENA_ON         0x1
 #define MCONFIG_CTRENA_CAPABLE    0x2
 #define MCONFIG_HKEEP_EXT_SDA_SCL 0x3
 
-/* Controller Control Register (MCTRL) */
+/* MCTRL options */
 #define MCTRL_REQUEST_NONE          0 /* None */
 #define MCTRL_REQUEST_EMITSTARTADDR 1 /* Emit a START */
 #define MCTRL_REQUEST_EMITSTOP      2 /* Emit a STOP */
@@ -1985,6 +2029,7 @@ struct i3c_reg {
 #define MCTRL_IBIRESP_ACK_MANDATORY 2 /* ACK with mandatory byte  */
 #define MCTRL_IBIRESP_MANUAL        3
 
+/* For REQUEST = EmitStartAddr */
 enum npcx_i3c_mctrl_type {
 	NPCX_I3C_MCTRL_TYPE_I3C,
 	NPCX_I3C_MCTRL_TYPE_I2C,
@@ -1995,7 +2040,7 @@ enum npcx_i3c_mctrl_type {
 #define MCTRL_TYPE_HDR_EXIT    0
 #define MCTRL_TYPE_TGT_RESTART 2
 
-/* Controller Status Register (MSTATUS) */
+/* MSTATUS options */
 #define MSTATUS_STATE_IDLE    0x0
 #define MSTATUS_STATE_TGTREQ  0x1
 #define MSTATUS_STATE_NORMACT 0x3 /* SDR message mode */
@@ -2012,13 +2057,11 @@ enum npcx_i3c_mctrl_type {
 #define IBIRULES_ADDR_MSK   0x3F
 #define IBIRULES_ADDR_SHIFT 0x6
 
-/* Software-triggered Pheripheral Reset Controller Register */
-struct swrst_reg {
-	/* 0x000: Software Reset Trigger */
-	volatile uint16_t SWRST_TRG;
-	volatile uint8_t reserved1[2];
-	volatile uint32_t SWRST_CTL[4];
-};
+/* Controller Interrupt Enable Set Register (MINTSET) */
+#define NPCX_I3C_MINTSET_NOWCNTLR 19
+
+/* Controller Interrupt Masked Register (MINTMASKED) */
+#define NPCX_I3C_MINTMASKED_NOWCNTLR 19
 
 /* Configuration Register (CONFIG) */
 #define NPCX_I3C_CONFIG_TGTENA      0
@@ -2265,73 +2308,61 @@ struct swrst_reg {
 #define NPCX_I3C_IBIEXT2_EXT6               FIELD(16, 8)
 #define NPCX_I3C_IBIEXT2_EXT7               FIELD(24, 8)
 
-/* MDMA device registers */
+/* MDMACTRL options */
+#define MDMA_DMAFB_DISABLE      0x0
+#define MDMA_DMAFB_EN_ONE_FRAME 0x1
+#define MDMA_DMAFB_EN_MANUAL    0x2
+#define MDMA_DMATB_DISABLE      0x0
+#define MDMA_DMATB_EN_ONE_FRAME 0x1
+#define MDMA_DMATB_EN_MANUAL    0x2
+
+/* MDMA Controller registers */
 struct mdma_reg {
+	/* Channel 0 */
 	/* 0x000: Channel 0 Control */
 	volatile uint32_t MDMA_CTL0;
-	/* 0x004: Channel 0 Source Base Address (RO) */
+	/* 0x004: Channel 0 Source Base Address */
 	volatile uint32_t MDMA_SRCB0;
 	/* 0x008: Channel 0 Destination Base Address */
 	volatile uint32_t MDMA_DSTB0;
 	/* 0x00C: Channel 0 Transfer Count */
 	volatile uint32_t MDMA_TCNT0;
-	/* 0x010: reserved */
-	volatile uint32_t reserved0;
-	/* 0x014: Channel 0 Current Destination (RO) */
-	volatile uint32_t MDMA_CDST0;
-	/* 0x018: Channel 0 Current Transfer Count (RO) */
-	volatile uint32_t MDMA_CTCNT0;
-	/* 0x01C: reserved */
+	/* 0x010: reserved1 */
 	volatile uint32_t reserved1;
+	/* 0x014: Channel 0 Current Destination */
+	volatile uint32_t MDMA_CDST0;
+	/* 0x018: Channel 0 Current Transfer Count */
+	volatile uint32_t MDMA_CTCNT0;
+	/* 0x01C: reserved2 */
+	volatile uint32_t reserved2;
+
+	/* Channel 1 */
 	/* 0x020: Channel 1 Control */
 	volatile uint32_t MDMA_CTL1;
 	/* 0x024: Channel 1 Source Base Address */
 	volatile uint32_t MDMA_SRCB1;
-	/* 0x028: Channel 1 Destination Base Address (RO) */
+	/* 0x028: Channel 1 Destination Base Address */
 	volatile uint32_t MDMA_DSTB1;
 	/* 0x02C: Channel 1 Transfer Count */
 	volatile uint32_t MDMA_TCNT1;
-	/* 0x030: reserved */
-	volatile uint32_t reserved2;
-	/* 0x034: Channel 1 Current Source (RO) */
+	/* 0x030: Channel 1 Current Source */
 	volatile uint32_t MDMA_CSRC1;
-	/* 0x038: Channel 1 Current Transfer Count (RO) */
+	/* 0x034: reserved3 */
+	volatile uint32_t reserved3;
+	/* 0x038: Channel 1 Current Transfer Count */
 	volatile uint32_t MDMA_CTCNT1;
 };
 
-/* Channel 0/1 Control Register (MDMA_CTL0/MDMA_CTL1) */
-#define NPCX_MDMA_CTL_MDMAEN                FIELD(0, 1)
-#define NPCX_MDMA_CTL_MPD                   FIELD(1, 1)
-#define NPCX_MDMA_CTL_SIEN                  FIELD(8, 1)
-#define NPCX_MDMA_CTL_MPS                   FIELD(14, 1)
-#define NPCX_MDMA_CTL_TC                    FIELD(18, 1)
+/* MDMA register fields */
+#define NPCX_MDMA_CTL_MDMAEN    0
+#define NPCX_MDMA_CTL_MPD       1
+#define NPCX_MDMA_CTL_SIEN      8
+#define NPCX_MDMA_CTL_MPS       14
+#define NPCX_MDMA_CTL_TC        18
 
 /* Channel 0/1 Transfer Count Register (MDMA_TCNT0/MDMA_TCNT1) */
 #define NPCX_MDMA_TCNT_TFR_CNT              FIELD(0, 13)
 
 /* Channel 0/1 Current Transfer Count Register (MDMA_CTCNT0/MDMA_CTCNT1) */
 #define NPCX_MDMA_CTCNT_CURENT_TFR_CNT      FIELD(0, 13)
-
-/* SPIP (SPI Peripheral Interface) registers */
-struct spip_reg {
-	/* 0x000: SPIP Data In/Out */
-	volatile uint16_t SPIP_DATA;
-	/* 0x002: SPIP Control 1 */
-	volatile uint16_t SPIP_CTL1;
-	/* 0x004: SPIP Status */
-	volatile uint8_t SPIP_STAT;
-	volatile uint8_t reserved1;
-};
-
-#define NPCX_SPIP_CTL1_SPIEN            0
-#define NPCX_SPIP_CTL1_MOD              2
-#define NPCX_SPIP_CTL1_EIR              5
-#define NPCX_SPIP_CTL1_EIW              6
-#define NPCX_SPIP_CTL1_SCM              7
-#define NPCX_SPIP_CTL1_SCIDL            8
-#define NPCX_SPIP_CTL1_SCDV             FIELD(9, 7)
-#define NPCX_SPIP_STAT_BSY              0
-#define NPCX_SPIP_STAT_RBF              1
-
 #endif /* _NUVOTON_NPCX_REG_DEF_H */
-

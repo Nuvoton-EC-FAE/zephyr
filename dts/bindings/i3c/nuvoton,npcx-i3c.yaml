@@ -6,7 +6,7 @@ description: |
 
     Representation:
 
-    /* If CONFIG_I3C_NPCX is enabled, the suggestion clock configuration as below */
+    /* If CONFIG_I3C_NPCX is enabled, the suggested clock configuration is as follows: */
     &pcc {
       clock-frequency = <DT_FREQ_M(90)>; /* OFMCLK runs at 90MHz */
       core-prescaler = <3>; /* CORE_CLK runs at 30MHz */
@@ -16,13 +16,19 @@ description: |
       apb4-prescaler = <3>; /* APB4_CLK runs at 30MHz */
     };
 
+    &rst {
+      status = "okay";
+    };
+
     &i3c0 {
       status = "okay";
-      pinctrl-0 = <&i3c1_sda_scl_gpe3_e4>;
-      pinctrl-names = "default";
 
-      i3c-scl-hz = <7500000>;
-      i3c-od-scl-hz = <1500000>;
+      /* I3C clock frequency suggestion = <PP_SCL, OD_SCL> */
+       * Full speed = <12500000, 4170000>
+       * Normal speed = <7500000, 1500000>
+       */
+      i3c-scl-hz = <12500000>;
+      i3c-od-scl-hz = <4170000>;
     };
 
 compatible: "nuvoton,npcx-i3c"
@@ -111,12 +117,6 @@ properties:
     type: int
     description: |
       Device Characteristics Register, used for bus enumeration with entdaa
-
-  mdma-channel:
-    required: true
-    type: int
-    description: |
-      mdma channel for I3C module transfer
 
   maximum-write:
     type: int

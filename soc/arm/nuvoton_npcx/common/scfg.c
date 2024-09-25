@@ -139,27 +139,21 @@ void npcx_i3c_target_sel(int module, bool enable)
         case 0:
 			if(enable == true) {
 	            inst_scfg->DEV_CTL3 |= BIT(NPCX_DEV_CTL3_I3C1_MS);
-			}
-			else
-			{
+			} else {
 				inst_scfg->DEV_CTL3 &= ~BIT(NPCX_DEV_CTL3_I3C1_MS);
 			}
 			break;
         case 1:
 			if(enable == true) {
 	            inst_scfg->DEV_CTL3 |= BIT(NPCX_DEV_CTL3_I3C2_MS);
-			}
-			else
-			{
+			} else {
 				inst_scfg->DEV_CTL3 &= ~BIT(NPCX_DEV_CTL3_I3C2_MS);
 			}
 			break;
         case 2:
 			if(enable == true) {
 	            inst_scfg->DEV_CTL3 |= BIT(NPCX_DEV_CTL3_I3C3_MS);
-			}
-			else
-			{
+			} else {
 				inst_scfg->DEV_CTL3 &= ~BIT(NPCX_DEV_CTL3_I3C3_MS);
 			}
 			break;
