@@ -34,7 +34,9 @@ static int get_bit_and_reset(const struct device *dev, int mask)
 #ifdef CONFIG_BBRAM_NPCX_EMUL
 	DRV_STATUS(dev) &= ~mask;
 #else
-	DRV_STATUS(dev) = mask;
+	if(result) {
+		DRV_STATUS(dev) = mask;
+	}
 #endif
 
 	return result;
