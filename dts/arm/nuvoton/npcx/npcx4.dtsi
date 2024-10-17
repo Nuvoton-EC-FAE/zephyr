@@ -373,6 +373,9 @@
 			status = "disabled";
 			#address-cells = <3>;
 			#size-cells = <0>;
+            
+			instance-id = <0>;
+			mdma-channel = <5>;
 		};
 
 		i3c1: i3c@400f2000 {
@@ -398,6 +401,9 @@
 			status = "disabled";
 			#address-cells = <3>;
 			#size-cells = <0>;
+            
+			instance-id = <1>;
+			mdma-channel = <6>;
 		};
 
 		i3c2: i3c@400f4000 {
@@ -423,6 +429,8 @@
 			status = "disabled";
 			#address-cells = <3>;
 			#size-cells = <0>;
+			instance-id = <2>;
+			mdma-channel = <7>;
 		};
 	};
 
