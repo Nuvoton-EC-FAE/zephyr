@@ -164,6 +164,8 @@ static inline uint32_t npcx_pwdwn_ctl_offset(uint32_t ctl_no)
 #define NPCX_ENIDL_CTL_LP_WK_CTL              6
 #define NPCX_ENIDL_CTL_PECI_ENI               2
 #define NPCX_ENIDL_CTL_ADC_ACC_DIS            1
+#define NPCX_ENSLP_CTL_ADC_IREF_LFSL          7
+#define NPCX_ENSLP_CTL_ADC_EREF_LFSL          6
 
 /* Macro functions for Development and Debugger Interface (DDI) registers */
 #define NPCX_DBGCTRL(base)   (*(volatile uint8_t *)(base + 0x004))
@@ -389,6 +391,9 @@ struct uart_reg {
 #define NPCX_UFRS_PSEL_FIELD                  FIELD(4, 2)
 #define NPCX_UFRS_PEN                         6
 #define NPCX_UMDSL_FIFO_MD                    0
+#define NPCX_UMDSL_ETD                        4
+#define NPCX_UMDSL_ERD                        5
+
 #define NPCX_UFTSTS_TEMPTY_LVL                FIELD(0, 5)
 #define NPCX_UFTSTS_TEMPTY_LVL_STS            5
 #define NPCX_UFTSTS_TFIFO_EMPTY_STS           6
@@ -420,6 +425,8 @@ struct uart_reg {
 	(*(volatile uint8_t *)(base + NPCX_WKINEN_OFFSET(group)))
 #define NPCX_WKMOD(base, group) \
 	(*(volatile uint8_t *)(base + NPCX_WKMOD_OFFSET(group)))
+#define NPCX_WKST(base, group) \
+	(*(volatile uint8_t *)(base + NPCX_WKST_OFFSET(group)))
 
 /*
  * General-Purpose I/O (GPIO) device registers

@@ -144,6 +144,21 @@ void npcx_clock_control_turn_off_system_sleep(void)
 
 	inst_pmc->PMCSR = 0;
 }
+
+void npcx_clock_control_adc_low_freq_clock_select(bool enable)
+{
+	const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
+	struct pmc_reg *const inst_pmc = HAL_PMC_INST(clk_dev);
+
+	if(enable) {
+		inst_pmc->ENIDL_CTL |= BIT(NPCX_ENSLP_CTL_ADC_IREF_LFSL) | BIT(NPCX_ENSLP_CTL_ADC_EREF_LFSL);
+	} else {
+		inst_pmc->ENIDL_CTL &= ~(BIT(NPCX_ENSLP_CTL_ADC_IREF_LFSL) | BIT(NPCX_ENSLP_CTL_ADC_EREF_LFSL));
+	}
+
+	while(IS_BIT_SET(inst_pmc->ENIDL_CTL, NPCX_ENIDL_CTL_ADC_ACC_DIS) != enable) ;
+}
+
 #endif /* CONFIG_PM */
 
 /* Clock controller driver registration */
@@ -250,6 +265,9 @@ static int npcx_clock_control_init(const struct device *dev)
 		NPCX_PWDWN_CTL(pmc_base, NPCX_PWDWN_CTL6) |= BIT(7);
 	}
 
+#if CONFIG_SOC_SERIES_NPCX4
+		NPCX_PWDWN_CTL(pmc_base, 10) = 0x3F;
+#endif
 	return 0;
 }
 

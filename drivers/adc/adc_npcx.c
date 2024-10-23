@@ -192,6 +192,11 @@ static void adc_npcx_isr(const struct device *dev)
 	uint16_t status = inst->ADCSTS;
 	uint16_t result, channel;
 
+#ifdef CONFIG_PM
+	/* make sure the ADC is not currently using the low freq clock */
+	npcx_clock_control_adc_low_freq_clock_select(false);
+#endif
+
 	/* Clear status pending bits first */
 	inst->ADCSTS = status;
 	LOG_DBG("%s: status is %04X\n", __func__, status);
