@@ -164,6 +164,8 @@ static inline uint32_t npcx_pwdwn_ctl_offset(uint32_t ctl_no)
 #define NPCX_ENIDL_CTL_LP_WK_CTL              6
 #define NPCX_ENIDL_CTL_PECI_ENI               2
 #define NPCX_ENIDL_CTL_ADC_ACC_DIS            1
+#define NPCX_ENSLP_CTL_ADC_IREF_LFSL          7
+#define NPCX_ENSLP_CTL_ADC_EREF_LFSL          6
 
 /* Macro functions for Development and Debugger Interface (DDI) registers */
 #define NPCX_DBGCTRL(base)   (*(volatile uint8_t *)(base + 0x004))
