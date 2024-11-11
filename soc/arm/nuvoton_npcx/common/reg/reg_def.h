@@ -365,6 +365,9 @@ struct uart_reg {
 #define NPCX_UFRS_PSEL_FIELD                  FIELD(4, 2)
 #define NPCX_UFRS_PEN                         6
 #define NPCX_UMDSL_FIFO_MD                    0
+#define NPCX_UMDSL_ETD                        4
+#define NPCX_UMDSL_ERD                        5
+
 #define NPCX_UFTSTS_TEMPTY_LVL                FIELD(0, 5)
 #define NPCX_UFTSTS_TEMPTY_LVL_STS            5
 #define NPCX_UFTSTS_TFIFO_EMPTY_STS           6
@@ -1789,4 +1792,58 @@ struct spip_reg {
 #define NPCX_SPIP_STAT_BSY              0
 #define NPCX_SPIP_STAT_RBF              1
 
+/* MDMACTRL options */
+#define MDMA_DMAFB_DISABLE      0x0
+#define MDMA_DMAFB_EN_ONE_FRAME 0x1
+#define MDMA_DMAFB_EN_MANUAL    0x2
+#define MDMA_DMATB_DISABLE      0x0
+#define MDMA_DMATB_EN_ONE_FRAME 0x1
+#define MDMA_DMATB_EN_MANUAL    0x2
+
+/* MDMA Controller registers */
+struct mdma_reg {
+	/* Channel 0 */
+	/* 0x000: Channel 0 Control */
+	volatile uint32_t MDMA_CTL0;
+	/* 0x004: Channel 0 Source Base Address */
+	volatile uint32_t MDMA_SRCB0;
+	/* 0x008: Channel 0 Destination Base Address */
+	volatile uint32_t MDMA_DSTB0;
+	/* 0x00C: Channel 0 Transfer Count */
+	volatile uint32_t MDMA_TCNT0;
+	/* 0x010: reserved1 */
+	volatile uint32_t reserved1;
+	/* 0x014: Channel 0 Current Destination */
+	volatile uint32_t MDMA_CDST0;
+	/* 0x018: Channel 0 Current Transfer Count */
+	volatile uint32_t MDMA_CTCNT0;
+	/* 0x01C: reserved2 */
+	volatile uint32_t reserved2;
+
+	/* Channel 1 */
+	/* 0x020: Channel 1 Control */
+	volatile uint32_t MDMA_CTL1;
+	/* 0x024: Channel 1 Source Base Address */
+	volatile uint32_t MDMA_SRCB1;
+	/* 0x028: Channel 1 Destination Base Address */
+	volatile uint32_t MDMA_DSTB1;
+	/* 0x02C: Channel 1 Transfer Count */
+	volatile uint32_t MDMA_TCNT1;
+	/* 0x030: Channel 1 Current Source */
+	volatile uint32_t MDMA_CSRC1;
+	/* 0x034: reserved3 */
+	volatile uint32_t reserved3;
+	/* 0x038: Channel 1 Current Transfer Count */
+	volatile uint32_t MDMA_CTCNT1;
+};
+
+/* MDMA register fields */
+#define NPCX_MDMA_CTL_MDMAEN    0
+#define NPCX_MDMA_CTL_MPD       1
+#define NPCX_MDMA_CTL_SIEN      8
+#define NPCX_MDMA_CTL_MPS       14
+#define NPCX_MDMA_CTL_TC        18
+#define NPCX_MDMA_TCNT_TFR_CNT  FIELD(0, 12)
+
 #endif /* _NUVOTON_NPCX_REG_DEF_H */
+
