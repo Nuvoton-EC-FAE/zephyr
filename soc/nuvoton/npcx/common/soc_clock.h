@@ -207,6 +207,15 @@ void npcx_clock_control_turn_on_system_sleep(bool is_deep, bool is_instant);
  */
 void npcx_clock_control_turn_off_system_sleep(void);
 
+/**
+ * @brief Function to enables ADC module to select the low-frequency clock
+ *        before entering to Idle/Deep-Idle mode and select the core clock
+ *        after exiting from DIdle/eep-Idle mode.
+ * 
+ * @param enable A boolean indicating the low-frequency clock is selected
+ */
+void npcx_clock_control_adc_low_freq_clock_select(bool enable);
+
 #ifdef __cplusplus
 }
 #endif

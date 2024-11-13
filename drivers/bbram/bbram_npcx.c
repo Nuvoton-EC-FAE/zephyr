@@ -32,9 +32,12 @@ static int get_bit_and_reset(const struct device *dev, int mask)
 	 *   For real chip, write 1 to clear status bit(s).
 	 */
 #ifdef CONFIG_BBRAM_NPCX_EMUL
-	DRV_STATUS(dev) &= ~mask;
+    DRV_STATUS(dev) &= ~mask;
 #else
-	DRV_STATUS(dev) = mask;
+    if (result)
+    {
+        DRV_STATUS(dev) = mask;
+    }
 #endif
 
 	return result;
