@@ -407,6 +407,39 @@
 			#reset-cells = <1>;
 			status = "disabled";
 		};
+
+		/* I2c Controllers - Do not use them as i2c node directly */
+		i2c_ctrl0: i2c@40009000 {
+			sbd-wui = <&wui_smb0_2>;
+		};
+
+		i2c_ctrl1: i2c@4000b000 {
+			sbd-wui = <&wui_smb1_3>;
+		};
+
+		i2c_ctrl2: i2c@400c0000 {
+			sbd-wui = <&wui_smb2>;
+		};
+
+		i2c_ctrl3: i2c@400c2000 {
+			sbd-wui = <&wui_smb3>;
+		};
+
+		i2c_ctrl4: i2c@40008000 {
+			sbd-wui = <&wui_smb4>;
+		};
+
+		i2c_ctrl5: i2c@40017000 {
+			sbd-wui = <&wui_smb5>;
+		};
+
+		i2c_ctrl6: i2c@40018000 {
+			sbd-wui = <&wui_smb6>;
+		};
+
+		i2c_ctrl7: i2c@40019000 {
+			sbd-wui = <&wui_smb7>;
+		};
 	};
 
 	soc-if {

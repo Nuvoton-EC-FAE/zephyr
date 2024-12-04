@@ -12,3 +12,12 @@ properties:
     required: true
   clocks:
     required: true
+
+  sbd-wui:
+    type: phandle
+    required: true
+    description: |
+      Mapping table between Wake-Up Input (WUI) and SMB_SBD signal.
+
+      For example the WUI mapping on NPCX4 SMB0 would be
+        sbd-wui = <&wui_smb0_2>;

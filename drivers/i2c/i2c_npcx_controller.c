@@ -3,6 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+#include <zephyr/pm/device.h>
 #include <zephyr/pm/policy.h>
 
 #define DT_DRV_COMPAT nuvoton_npcx_i2c_ctrl
@@ -73,7 +74,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/atomic.h>
 #include <soc.h>
-
+#include "soc_miwu.h"
 #include <zephyr/logging/log.h>
 #include <zephyr/irq.h>
 LOG_MODULE_REGISTER(i2c_npcx, LOG_LEVEL_ERR);
@@ -152,6 +153,10 @@ struct i2c_ctrl_config {
 	uintptr_t base; /* i2c controller base address */
 	struct npcx_clk_cfg clk_cfg; /* clock configuration */
 	uint8_t irq; /* i2c controller irq */
+#ifdef CONFIG_PM_DEVICE
+	bool wakeup_source;
+	struct npcx_wui sbd_wui;
+#endif
 };
 
 /* Driver data */
@@ -168,6 +173,7 @@ struct i2c_ctrl_data {
 	uint8_t port; /* current port used the controller */
 	bool is_configured; /* is port configured? */
 	const struct npcx_i2c_timing_cfg *ptr_speed_confs;
+	struct miwu_callback sbd_callback;
 #ifdef CONFIG_I2C_TARGET
 	struct i2c_target_config *target_cfg[NPCX_I2C_FLAG_COUNT];
     uint8_t target_idx;
@@ -1162,6 +1168,9 @@ int npcx_i2c_ctrl_target_register(const struct device *i2c_dev,
 		return -EBUSY;
 	}
 
+	/* update the I2C port index */
+	data->port = port;
+
 	i2c_ctrl_irq_enable(i2c_dev, 0);
 	/* Switch correct port for i2c controller first */
 	npcx_pinctrl_i2c_port_sel(idx_ctrl, idx_port);
@@ -1413,6 +1422,109 @@ out:
 	return ret;
 }
 
+#ifdef CONFIG_PM_DEVICE
+static void npcx_i2c_wui_callback(const struct device *dev, struct npcx_wui *wui)
+{
+	struct i2c_ctrl_data *const data = dev->data;
+	struct smb_reg *const inst = HAL_I2C_INSTANCE(dev);
+	struct glue_reg *inst_glue = (struct glue_reg *) NPCX_GLUE_REG_ADDR;
+
+	ARG_UNUSED(wui);
+
+	LOG_INF("I2C MIWU Interrupt callback: port: %x", data->port);
+
+        /* Disable Event assertion */
+	inst_glue->SMB_EEN &= ~BIT(data->port >> 4);
+        /* Clear Start condition detection */
+	inst_glue->SMB_SBD |= BIT(data->port >> 4);
+
+	/* Enable SMB interrupt and 'New Address Match' interrupt source */
+	inst->SMBCTL1 |= BIT(NPCX_SMBCTL1_NMINTE) | BIT(NPCX_SMBCTL1_INTEN);
+	i2c_ctrl_irq_enable(dev, 1);
+}
+
+void npcx_i2c_wakeup_enable(const struct device *dev, bool enable)
+{
+	const struct i2c_ctrl_config *const config = dev->config;
+	struct i2c_ctrl_data *const data = dev->data;
+	struct smb_reg *const inst = HAL_I2C_INSTANCE(dev);
+	struct glue_reg *inst_glue = (struct glue_reg *) NPCX_GLUE_REG_ADDR;
+
+	if(enable) {
+		/* Initialize a miwu device input and its callback function */
+		npcx_miwu_init_dev_callback(&data->sbd_callback, &config->sbd_wui,
+					    npcx_i2c_wui_callback, dev);
+		npcx_miwu_manage_callback(&data->sbd_callback, true);
+
+		/* Configure MIWU setting and enable its interrupt */
+		npcx_miwu_interrupt_configure(&config->sbd_wui, NPCX_MIWU_MODE_EDGE, NPCX_MIWU_TRIG_HIGH);
+		npcx_miwu_irq_get_and_clear_pending(&config->sbd_wui);
+		npcx_miwu_irq_enable(&config->sbd_wui);
+
+                /* Clear Start condition detection */
+		inst_glue->SMB_SBD |= BIT(data->port >> 4);
+        	/* Enable Event assertion */
+		inst_glue->SMB_EEN |= BIT(data->port >> 4);
+        	/* Enable start detect in IDLE */
+		inst->SMBCTL3 |= BIT(NPCX_SMBCTL3_IDL_START);
+	} else {
+		npcx_miwu_irq_get_and_clear_pending(&config->sbd_wui);
+		npcx_miwu_irq_disable(&config->sbd_wui);
+
+                /* Disable Event assertion */
+		inst_glue->SMB_EEN &= ~BIT(data->port >> 4);
+        	/* Disable start detect in IDLE */
+		inst->SMBCTL3 &= ~BIT(NPCX_SMBCTL3_IDL_START);
+	}
+}
+
+static int npcx_i2c_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	const struct i2c_ctrl_config *const config = dev->config;
+	struct i2c_ctrl_data *const data = dev->data;
+	const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
+	struct smb_reg *const inst = HAL_I2C_INSTANCE(dev);
+	int ret = 0;
+
+	switch (action) {
+	case PM_DEVICE_ACTION_RESUME:
+		if (config->wakeup_source) {
+			LOG_INF("I2C device wakeup from SBD: %x", data->port);
+
+			npcx_i2c_wakeup_enable(dev, false);
+		} else {
+			LOG_INF("I2C device resume and power on: %x", data->port);
+
+			ret = clock_control_on(clk_dev,	(clock_control_subsys_t) &config->clk_cfg);
+			if (ret != 0) {
+				LOG_ERR("Turn on %s clock fail.", dev->name);
+				return ret;
+			}
+		}
+	break;
+	case PM_DEVICE_ACTION_SUSPEND:
+		if (IS_BIT_SET(inst->SMBCST, NPCX_SMBCST_BB)) {
+			return -ECANCELED;
+		}
+
+		if (config->wakeup_source) {
+			npcx_i2c_wakeup_enable(dev, true);
+		} else {
+			ret = clock_control_off(clk_dev, (clock_control_subsys_t) &config->clk_cfg);
+			if (ret != 0) {
+				LOG_ERR("Turn off %s clock fail.", dev->name);
+				return ret;
+			}
+		}
+	break;
+	default:
+		ret = -ENOTSUP;
+	}
+
+	return ret;
+}
+#endif /* CONFIG_PM_DEVICE */
+
 /* I2C controller driver registration */
 static int i2c_ctrl_init(const struct device *dev)
 {
@@ -1503,6 +1615,13 @@ static int i2c_ctrl_init(const struct device *dev)
 		return ret;                                                    \
 	}
 
+#ifdef CONFIG_PM_DEVICE
+#define NPCX_I2C_PM_WAKEUP(inst)                                               \
+	.wakeup_source = (uint8_t)DT_INST_PROP_OR(inst, wakeup_source, 0),     \
+	.sbd_wui = NPCX_DT_WUI_ITEM_BY_NAME(inst, sbd_wui),
+#else
+#define NPCX_I2C_PM_WAKEUP(inst)
+#endif
 
 #define NPCX_I2C_CTRL_INIT(inst)                                               \
 	NPCX_I2C_CTRL_INIT_FUNC_DECL(inst);                                    \
@@ -1511,13 +1630,15 @@ static int i2c_ctrl_init(const struct device *dev)
 		.base = DT_INST_REG_ADDR(inst),                                \
 		.irq = DT_INST_IRQN(inst),                                     \
 		.clk_cfg = NPCX_DT_CLK_CFG_ITEM(inst),                         \
+		NPCX_I2C_PM_WAKEUP(inst)                                       \
 	};                                                                     \
 									       \
 	static struct i2c_ctrl_data i2c_ctrl_data_##inst;                      \
 									       \
+	PM_DEVICE_DT_INST_DEFINE(inst, npcx_i2c_pm_action);                    \
 	DEVICE_DT_INST_DEFINE(inst,                                            \
 			    NPCX_I2C_CTRL_INIT_FUNC(inst),                     \
-			    NULL,                                              \
+			    PM_DEVICE_DT_INST_GET(inst),                       \
 			    &i2c_ctrl_data_##inst, &i2c_ctrl_cfg_##inst,       \
 			    PRE_KERNEL_1, CONFIG_I2C_INIT_PRIORITY,            \
 			    NULL);                                             \
