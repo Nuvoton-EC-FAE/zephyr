@@ -15,14 +15,25 @@
 
 		/* MIWU table 0 */
 		/* MIWU group H */
+		wui_i3c1_sda: wui0-8-2 {
+			miwus = <&miwu0 7 2>; /* I3C1_SDA */
+		};
 		wui_ioe7: wui0-8-7 {
 			miwus = <&miwu0 7 7>; /* GPIOE7 */
 		};
 
 		/* MIWU table 1 */
 		/* MIWU group B */
+		wui_i3c3_sda: wui1-2-2 {
+			miwus = <&miwu1 1 2>; /* I3C3_SDA */
+		};
 		wui_io13: wui1-2-3 {
 			miwus = <&miwu1 1 3>; /* GPIO13 */
+		};
+
+		/* MIWU group F */
+		wui_i3c2_sda: wui1-6-0 {
+			miwus = <&miwu1 5 0>; /* I3C2_SDA */
 		};
 
 		/* MIWU group G */

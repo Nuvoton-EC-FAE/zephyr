@@ -299,6 +299,14 @@ enum npcx_hif_type {
 	NPCX_HIF_TYPE_ESPI_SHI,
 };
 
+/* Supported VOSCCLK frequency for SIO_CLK_SEL FILED in DEV_CTL3 register. */
+enum npcx_voscclk_type {
+	NPCX_VOSCCLK_96MHz,
+	NPCX_VOSCCLK_100MHz,
+	NPCX_VOSCCLK_120MHz,
+	NPCX_VOSCCLK_90MHz,
+};
+
 /*
  * System Glue (GLUE) device registers
  */
