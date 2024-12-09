@@ -12,6 +12,8 @@
 #include <zephyr/irq.h>
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/sys_io.h>
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/policy.h>
 
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/i3c.h>
@@ -19,6 +21,8 @@
 #include <zephyr/drivers/i3c/i3c_npcx.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/drivers/reset.h>
+#include <soc.h>
+#include "soc_miwu.h"
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(npcx_i3c, CONFIG_I3C_LOG_LEVEL);
@@ -71,6 +75,15 @@ enum npcx_i3c_oper_state {
 	NPCX_I3C_WR,
 	NPCX_I3C_RD,
 	NPCX_I3C_IBI,
+};
+
+/* wui event type */
+enum npcx_i3c_wui_event {
+	NPCX_I3C_WUI_SDA,
+	NPCX_I3C_WUI_ADDRW,
+	NPCX_I3C_WUI_RSTW,
+
+	NPCX_I3C_WUI_LAST,
 };
 
 /* I3C timing configuration for each i3c speed */
@@ -135,6 +148,14 @@ struct npcx_i3c_config {
 	struct npcx_clk_cfg mdma_clk_subsys;
 	struct mdma_reg *mdma_base;
 #endif
+
+#ifdef CONFIG_PM_DEVICE
+	bool wakeup_source;
+	/* Size of I3C wui mapping array */
+	int wui_size;
+	/* Mapping table between I3C bus and wui */
+	struct npcx_wui wui_maps[];
+#endif
 };
 
 struct npcx_i3c_data {
@@ -146,6 +167,10 @@ struct npcx_i3c_data {
 	struct k_sem target_event_sem;         /* Mutex of i3c target ibi/hot join/bus controll event */
 	enum npcx_i3c_oper_state oper_state; /* controller operation state */
     struct i3c_target_config *target_config;
+
+#ifdef CONFIG_PM_DEVICE
+	struct miwu_callback i3c_wui_cb[NPCX_I3C_WUI_LAST];
+#endif
 
 #ifdef CONFIG_I3C_NPCX_DMA
 	uint8_t *mdma_rd_buf;
@@ -2200,28 +2225,34 @@ static void npcx_i3c_target_isr(const struct device *dev)
 				IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_STMSG)) {
 
 				if(get_oper_state(dev) != NPCX_I3C_IBI) {
-					/* The current bus request is an SDR mode read from this target device */
-					if (IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_STREQRD)) {
-						set_oper_state(dev, NPCX_I3C_RD);
+					/* abort the IBI event */
+					SET_FIELD(inst->CTRL, NPCX_I3C_CTRL_EVENT, 0);
+					inst->STATUS = BIT(NPCX_I3C_STATUS_EVENT);
+					k_sem_give(&data->target_event_sem);
+					set_oper_state(dev, NPCX_I3C_IDLE);
+				}
 
-						if ((target_cb != NULL) && (target_cb->read_requested_cb != NULL)) {
-							target_cb->read_requested_cb(data->target_config,
-										     (uint8_t *)&val);
-						}
+				/* The current bus request is an SDR mode read from this target device */
+				if (IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_STREQRD)) {
+					set_oper_state(dev, NPCX_I3C_RD);
+
+					if ((target_cb != NULL) && (target_cb->read_requested_cb != NULL)) {
+						target_cb->read_requested_cb(data->target_config,
+									     (uint8_t *)&val);
 					}
-					/* The current bus request is an SDR mode write to this target device */
-					else
-					{
-						set_oper_state(dev, NPCX_I3C_WR);
+				}
+				/* The current bus request is an SDR mode write to this target device */
+				else
+				{
+					set_oper_state(dev, NPCX_I3C_WR);
 
 #ifdef CONFIG_I3C_NPCX_DMA
-						npcx_i3c_target_rx_read(dev);
+					npcx_i3c_target_rx_read(dev);
 #endif
 
-						if ((target_cb != NULL) &&
-						    (target_cb->write_requested_cb != NULL)) {
-							target_cb->write_requested_cb(data->target_config);
-						}
+					if ((target_cb != NULL) &&
+					    (target_cb->write_requested_cb != NULL)) {
+						target_cb->write_requested_cb(data->target_config);
 					}
 				}
 			}
@@ -2669,6 +2700,112 @@ static int npcx_i3c_target_config(const struct device *dev)
 	return 0;
 }
 
+#ifdef CONFIG_PM_DEVICE
+static void npcx_i3c_wui_callback(const struct device *dev, struct npcx_wui *wui)
+{
+	const struct npcx_i3c_config *const config = dev->config;
+
+	ARG_UNUSED(wui);
+
+	npcx_miwu_irq_get_and_clear_pending(&config->wui_maps[NPCX_I3C_WUI_SDA]);
+	npcx_miwu_irq_disable(&config->wui_maps[NPCX_I3C_WUI_SDA]);
+	npcx_miwu_irq_get_and_clear_pending(&config->wui_maps[NPCX_I3C_WUI_ADDRW]);
+	npcx_miwu_irq_disable(&config->wui_maps[NPCX_I3C_WUI_ADDRW]);
+	npcx_miwu_irq_get_and_clear_pending(&config->wui_maps[NPCX_I3C_WUI_RSTW]);
+	npcx_miwu_irq_disable(&config->wui_maps[NPCX_I3C_WUI_RSTW]);
+}
+
+void npcx_i3c_wakeup_enable(const struct device *dev, bool enable, uint8_t index, enum miwu_int_trig trig)
+{
+	const struct npcx_i3c_config *const config = dev->config;
+	struct npcx_i3c_data *const data = dev->data;
+
+	if(enable) {
+		/* Initialize a miwu device input and its callback function */
+		npcx_miwu_init_dev_callback(&data->i3c_wui_cb[index], &config->wui_maps[index],
+					    npcx_i3c_wui_callback, dev);
+		npcx_miwu_manage_callback(&data->i3c_wui_cb[index], true);
+
+		/* Configure MIWU setting and enable its interrupt */
+		npcx_miwu_interrupt_configure(&config->wui_maps[index], NPCX_MIWU_MODE_EDGE, trig);
+		npcx_miwu_irq_enable(&config->wui_maps[index]);
+	} else {
+		npcx_miwu_irq_get_and_clear_pending(&config->wui_maps[index]);
+		npcx_miwu_irq_disable(&config->wui_maps[index]);
+	}
+}
+
+static int npcx_i3c_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	const struct npcx_i3c_config *const config = dev->config;
+	const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
+	struct i3c_reg *inst = config->base;
+	int ret = 0;
+
+	switch (action) {
+	case PM_DEVICE_ACTION_RESUME:
+		if (config->wakeup_source) {
+			if(config->target_mode == false) {
+				npcx_i3c_wakeup_enable(dev, false, NPCX_I3C_WUI_SDA, NPCX_MIWU_TRIG_LOW);
+			}
+			else {
+				npcx_i3c_wakeup_enable(dev, false, NPCX_I3C_WUI_SDA, NPCX_MIWU_TRIG_LOW);
+				npcx_i3c_wakeup_enable(dev, false, NPCX_I3C_WUI_ADDRW, NPCX_MIWU_TRIG_HIGH);
+				npcx_i3c_wakeup_enable(dev, false, NPCX_I3C_WUI_RSTW, NPCX_MIWU_TRIG_HIGH);
+			}
+		} else {
+			ret = clock_control_on(clk_dev,	(clock_control_subsys_t) &config->clock_subsys);
+			if (ret != 0) {
+				LOG_ERR("Turn on %s clock fail.", dev->name);
+				return ret;
+			}
+#ifdef CONFIG_I3C_NPCX_DMA
+			ret = clock_control_on(clk_dev,	(clock_control_subsys_t) &config->mdma_clk_subsys);
+			if (ret != 0) {
+				LOG_ERR("Turn on %s clock fail.", dev->name);
+				return ret;
+			}
+#endif
+		}
+	break;
+	case PM_DEVICE_ACTION_SUSPEND:
+		/* the I3C bus is still busy now */
+		if (IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_STNOTSTOP)) {
+			return -ECANCELED;
+		}
+
+		if (config->wakeup_source) {
+			if(config->target_mode == false) {
+				npcx_i3c_wakeup_enable(dev, true, NPCX_I3C_WUI_SDA, NPCX_MIWU_TRIG_LOW);
+			}
+			else {
+				npcx_i3c_wakeup_enable(dev, true, NPCX_I3C_WUI_SDA, NPCX_MIWU_TRIG_LOW);
+				npcx_i3c_wakeup_enable(dev, true, NPCX_I3C_WUI_ADDRW, NPCX_MIWU_TRIG_HIGH);
+				npcx_i3c_wakeup_enable(dev, true, NPCX_I3C_WUI_RSTW, NPCX_MIWU_TRIG_HIGH);
+			}
+		} else {
+			ret = clock_control_off(clk_dev, (clock_control_subsys_t) &config->clock_subsys);
+			if (ret != 0) {
+				LOG_ERR("Turn off %s clock fail.", dev->name);
+				return ret;
+			}
+#ifdef CONFIG_I3C_NPCX_DMA
+			ret = clock_control_off(clk_dev, (clock_control_subsys_t) &config->mdma_clk_subsys);
+			if (ret != 0) {
+				LOG_ERR("Turn off %s clock fail.", dev->name);
+				return ret;
+			}
+#endif
+		}
+	break;
+	default:
+		ret = -ENOTSUP;
+	}
+
+	return ret;
+}
+#endif /* CONFIG_PM_DEVICE */
+
 static int npcx_i3c_init(const struct device *dev)
 {
 	const struct npcx_i3c_config *config = dev->config;
@@ -2792,6 +2929,15 @@ static const struct i3c_driver_api npcx_i3c_driver_api = {
 #endif
 };
 
+#ifdef CONFIG_PM_DEVICE
+#define NPCX_I3C_PM_WAKEUP(inst)                                               \
+	.wakeup_source = (uint8_t)DT_INST_PROP_OR(inst, wakeup_source, 0),     \
+	.wui_size = NPCX_DT_WUI_ITEMS_LEN(inst),                               \
+	.wui_maps = NPCX_DT_WUI_ITEMS_LIST(inst),
+#else
+#define NPCX_I3C_PM_WAKEUP(inst)
+#endif
+
 #define I3C_NPCX_DEVICE(id)                                                                        \
 	PINCTRL_DT_INST_DEFINE(id);                                                                \
 	static void npcx_i3c_config_func_##id(const struct device *dev)                            \
@@ -2833,9 +2979,12 @@ static const struct i3c_driver_api npcx_i3c_driver_api = {
 		IF_ENABLED(CONFIG_I3C_NPCX_DMA, (                                                  \
 			.mdma_base = (struct mdma_reg *)DT_INST_REG_ADDR_BY_IDX(id, 1),            \
 		))                                                                                 \
+		NPCX_I3C_PM_WAKEUP(id)                                                             \
 	};                                                                                         \
 	static struct npcx_i3c_data npcx_i3c_data_##id;                                            \
-	DEVICE_DT_INST_DEFINE(id, npcx_i3c_init, NULL, &npcx_i3c_data_##id, &npcx_i3c_config_##id, \
+	PM_DEVICE_DT_INST_DEFINE(id, npcx_i3c_pm_action);                                          \
+	DEVICE_DT_INST_DEFINE(id, npcx_i3c_init, PM_DEVICE_DT_INST_GET(id),                        \
+	                      &npcx_i3c_data_##id, &npcx_i3c_config_##id,                          \
 			      POST_KERNEL, CONFIG_I3C_CONTROLLER_INIT_PRIORITY,                    \
 			      &npcx_i3c_driver_api);
 

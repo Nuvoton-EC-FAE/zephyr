@@ -319,7 +319,7 @@
 				status = "disabled";
 			};
 		};
-		
+
 		i3c0: i3c@400f0000 {
 			compatible = "nuvoton,npcx-i3c";
 
@@ -343,8 +343,9 @@
 			status = "disabled";
 			#address-cells = <3>;
 			#size-cells = <0>;
-            
+
 			instance-id = <0>;
+			wui-maps = <&wui_i3c1_sda &wui_i3c1_addrw &wui_i3c1_rstw>;
 		};
 
 		i3c1: i3c@400f2000 {
@@ -370,8 +371,9 @@
 			status = "disabled";
 			#address-cells = <3>;
 			#size-cells = <0>;
-            
+
 			instance-id = <1>;
+			wui-maps = <&wui_i3c2_sda &wui_i3c2_addrw &wui_i3c2_rstw>;
 		};
 
 		i3c2: i3c@400f4000 {
@@ -397,8 +399,9 @@
 			status = "disabled";
 			#address-cells = <3>;
 			#size-cells = <0>;
-            
+
 			instance-id = <2>;
+			wui-maps = <&wui_i3c3_sda &wui_i3c3_addrw &wui_i3c3_rstw>;
 		};
 
 		rst: reset-controller@400c3100 {
