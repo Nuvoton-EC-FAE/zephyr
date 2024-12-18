@@ -42,6 +42,7 @@ struct npcx_qspi_fiu_data {
 	int sw_cs;
 	/* Current QSPI bus operation */
 	uint32_t operation;
+	bool critical_section;
 };
 
 /* NPCX SPI User Mode Access (UMA) functions */
@@ -205,13 +206,26 @@ int qspi_npcx_fiu_uma_transceive(const struct device *dev, struct npcx_uma_cfg *
 	return 0;
 }
 
+void qspi_npcx_fiu_critical_section(const struct device *dev,
+                                    bool enable)
+{
+	struct npcx_qspi_fiu_data *const data = dev->data;
+
+	LOG_INF("qspi_npcx_fiu_critical_section: %x", enable);
+	data->critical_section = enable;
+}
+
 void qspi_npcx_fiu_mutex_lock_configure(const struct device *dev,
 					const struct npcx_qspi_cfg *cfg,
 					const uint32_t operation)
 {
 	struct npcx_qspi_fiu_data *const data = dev->data;
 
-	k_sem_take(&data->lock_sem, K_FOREVER);
+	if (data->critical_section == false) {
+		k_sem_take(&data->lock_sem, K_FOREVER);
+	} else {
+		k_sem_take(&data->lock_sem, K_NO_WAIT);
+	}
 
 	/* If the current device is different from previous one, configure it */
 	if (data->cur_cfg != cfg) {
@@ -275,6 +289,8 @@ static int qspi_npcx_fiu_init(const struct device *dev)
 		inst->FIU_EXT_CFG |= BIT(NPCX_FIU_EXT_CFG_SPI1_2DEV);
 #endif
 	}
+
+	data->critical_section = false;
 
 	return 0;
 }
