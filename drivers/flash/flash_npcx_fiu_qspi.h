@@ -64,6 +64,15 @@ int qspi_npcx_fiu_uma_transceive(const struct device *dev, struct npcx_uma_cfg *
 				 uint32_t flags);
 
 /**
+ * @brief Enable the FIU service in critical section
+ *
+ * @param dev Pointer to the device structure for qspi bus controller instance.
+ * @param enable true: enable the service in critical section, false: normal operation
+ */
+void qspi_npcx_fiu_critical_section(const struct device *dev,
+                                    bool enable);
+
+/**
  * @brief Lock the mutex of npcx qspi bus controller and apply its configuration
  *
  * @param dev Pointer to the device structure for qspi bus controller instance.
