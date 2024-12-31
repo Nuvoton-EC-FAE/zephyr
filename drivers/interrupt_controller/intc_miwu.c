@@ -258,6 +258,23 @@ bool npcx_miwu_irq_get_and_clear_pending(const struct npcx_wui *wui)
 	return pending;
 }
 
+bool npcx_miwu_irq_get_pending(const struct npcx_wui *wui)
+{
+	const struct intc_miwu_config *config = miwu_devs[wui->table]->config;
+	const uint32_t base = config->base;
+	bool pending = IS_BIT_SET(NPCX_WKPND(base, wui->group), wui->bit);
+
+	return pending;
+}
+
+void npcx_miwu_irq_clear_pending(const struct npcx_wui *wui)
+{
+	const struct intc_miwu_config *config = miwu_devs[wui->table]->config;
+	const uint32_t base = config->base;
+
+	NPCX_WKPCL(base, wui->group) = BIT(wui->bit);
+}
+
 int npcx_miwu_interrupt_configure(const struct npcx_wui *wui,
 		enum miwu_int_mode mode, enum miwu_int_trig trig)
 {

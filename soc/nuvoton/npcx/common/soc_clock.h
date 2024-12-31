@@ -106,9 +106,9 @@ struct npcx_clk_cfg {
 #endif /* CONFIG_CLOCK_CONTROL_NPCX_SUPP_FIU1 */
 
 /* I3C clock divider */
-#if (OFMCLK == MHZ(120)) /* MCLkD must between 40 mhz to 50 mhz*/
+#if (MHZ(120) <= OFMCLK) /* MCLAD must between 40 mhz to 50 mhz*/
 #define MCLKD_SL 2    /* I3C_CLK = (MCLK / 3) */
-#elif (OFMCLK <= MHZ(100) && OFMCLK >= MHZ(80))
+#elif (MHZ(80) <= OFMCLK) /* MCLAD must between 40 mhz to 50 mhz*/
 #define MCLKD_SL 1    /* I3C_CLK = (MCLK / 2) */
 #else
 #define MCLKD_SL 0    /* I3C_CLK = MCLK */
@@ -172,6 +172,12 @@ struct npcx_clk_cfg {
 #define VAL_HFCBCD3 MCLKD_SL
 
 /**
+ * @brief Function to get current value of 0f 32-bit counter of event timer.
+ *
+ */
+uint32_t npcx_itim_get_evt_cyc32(void);
+
+/**
  * @brief Function to notify clock driver that backup the counter value of
  *        low-frequency timer before ec entered deep idle state.
  */
@@ -206,6 +212,15 @@ void npcx_clock_control_turn_on_system_sleep(bool is_deep, bool is_instant);
  * @brief Function to turn off system sleep mode.
  */
 void npcx_clock_control_turn_off_system_sleep(void);
+
+/**
+ * @brief Function to enables ADC module to select the low-frequency clock
+ *        before entering to Idle/Deep-Idle mode and select the core clock
+ *        after exiting from DIdle/eep-Idle mode.
+ * 
+ * @param enable A boolean indicating the low-frequency clock is selected
+ */
+void npcx_clock_control_adc_low_freq_clock_select(bool enable);
 
 #ifdef __cplusplus
 }
