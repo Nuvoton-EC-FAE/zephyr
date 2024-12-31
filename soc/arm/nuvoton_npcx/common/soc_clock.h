@@ -169,7 +169,13 @@ struct npcx_clk_cfg {
 #define VAL_HFCBCD2 APB3DIV_VAL
 #endif /* APB4DIV_VAL */
 /* I3C1~I3C3 share the same configuration */
-#define VAL_HFCBCD3 (MCLKD_SL)
+#define VAL_HFCBCD3 MCLKD_SL
+
+/**
+ * @brief Function to get current value of 0f 32-bit counter of event timer.
+ *
+ */
+uint32_t npcx_itim_get_evt_cyc32(void);
 
 /**
  * @brief Function to notify clock driver that backup the counter value of
