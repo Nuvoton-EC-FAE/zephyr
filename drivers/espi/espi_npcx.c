@@ -98,6 +98,16 @@ struct espi_npcx_data {
 #define ESPI_OOB_TAG                               0x00
 #define ESPI_OOB_MAX_TIMEOUT                       500ul /* 500 ms */
 
+#define NPCX_ESPI_BM_MAX_TX_PAYLOAD 64
+#define NPCX_ESPI_BM_MAX_RX_PAYLOAD 64
+
+#define ESPI_BM_MEM32_READ_CYCLE_TYPE                 0x0
+#define ESPI_BM_MEM32_WRITE_CYCLE_TYPE                0x1
+#define ESPI_BM_MEM64_READ_CYCLE_TYPE                 0x2
+#define ESPI_BM_MEM64_WRITE_CYCLE_TYPE                0x3
+#define ESPI_BM_SUCCESS_WITH_DATA_CYCLE_TYPE    0xf
+#define ESPI_BM_SUCCESS_WITHOUT_DATA_CYCLE_TYPE 0x6
+
 /* eSPI bus interrupt configuration structure and macro function */
 struct espi_bus_isr {
 	uint8_t status_bit; /* bit order in ESPISTS register */
@@ -632,6 +642,19 @@ static void espi_vw_send_bootload_done(const struct device *dev)
 	}
 }
 
+static void notify_vw_status(const struct device *dev,
+				enum espi_vwire_signal signal)
+{
+	struct espi_npcx_data *const data = dev->data;
+	struct espi_event evt = { ESPI_BUS_EVENT_VWIRE_RECEIVED, 0, 0 };
+	uint8_t status = 0;
+
+	espi_npcx_receive_vwire(dev, signal, &status);
+	evt.evt_details = signal;
+	evt.evt_data = status;
+	espi_send_callbacks(&data->callbacks, dev, evt);
+}
+
 static void espi_vw_generic_isr(const struct device *dev, struct npcx_wui *wui)
 {
 	int idx;
@@ -664,6 +687,12 @@ static void espi_vw_generic_isr(const struct device *dev, struct npcx_wui *wui)
 		espi_vw_notify_host_warning(dev, signal);
 	} else if (signal == ESPI_VWIRE_SIGNAL_PLTRST) {
 		espi_vw_notify_plt_rst(dev);
+	} else if (signal == ESPI_VWIRE_SIGNAL_SLP_MSC
+			|| signal == ESPI_VWIRE_SIGNAL_Z8
+			|| signal == ESPI_VWIRE_SIGNAL_Z9
+			|| signal == ESPI_VWIRE_SIGNAL_Z10
+			|| signal == ESPI_VWIRE_SIGNAL_FL_ACK) {
+		notify_vw_status(dev, signal);
 	}
 }
 
@@ -679,7 +708,6 @@ static void espi_vw_espi_rst_isr(const struct device *dev, struct npcx_wui *wui)
 	data->espi_rst_level = gpio_pin_get_raw(config->reset_pin.port,
 						   config->reset_pin.pin);
 #else
-	struct espi_reg *const inst = HAL_INSTANCE(dev);
 
 	data->espi_rst_level = !IS_BIT_SET(inst->ESPISTS,
 					      NPCX_ESPISTS_ESPIRST_LVL);
@@ -1311,6 +1339,282 @@ void npcx_espi_disable_interrupts(const struct device *dev)
 	npcx_miwu_irq_disable(&config->espi_rst_wui);
 }
 
+static void espi_npcx_bm_prepare_tx_header(const struct device *dev,
+	int cyc_type,  uint64_t mem_addr, int mem_len, int is64bit)
+{
+	struct espi_reg *const inst = HAL_INSTANCE(dev);
+	if (is64bit) {
+		/*
+		 * First 4 bytes of bm cycle command header in tx buffer
+		 *
+		 * [24:31] - LEN[0:7]     Data length of BM read request package
+		 * [20:23] - TAG          Tag of BM read
+		 * [16:19] - LEN[8:11]    Data length of BM read request package
+		 * [8:15]  - CYCLE_TYPE   Cycle type
+		 * [0:7]   - SZ_PACK      Reserved. (Npcx only)
+		 */
+			inst->PBMTXBUF[0] = ((mem_len & 0xFF) << 24)
+								| ((cyc_type & 0xFF) << 8)
+								| (((mem_len >> 8) & 0x0F) << 16) ;
+		/*
+		 * Following 8 bytes of tager flash address in tx buffer
+		 * [24:31] - ADDR[39:32]   Start address of flash cycle command request
+		 * [16:23] - ADDR[47:40]
+		 * [8:15]  - ADDR[55:48]
+		 * [0:7]   - ADDR[63:56]
+		 * [24:31] - ADDR[0:7]
+		 * [16:23] - ADDR[15:8]
+		 * [8:15]  - ADDR[23:16]
+		 * [0:7]   - ADDR[31:24]
+		 */
+		inst->PBMTXBUF[1] = sys_cpu_to_be32((mem_addr >> 32) & 0xffffffff);
+		inst->PBMTXBUF[2] = sys_cpu_to_be32((mem_addr) & 0xffffffff);
+	} else {
+				/*
+		 * First 4 bytes of bm cycle command header in tx buffer
+		 *
+		 * [24:31] - LEN[0:7]     Data length of BM read request package
+		 * [20:23] - TAG          Tag of BM read
+		 * [16:19] - LEN[8:11]    Data length of BM read request package
+		 * [8:15]  - CYCLE_TYPE   Cycle type
+		 * [0:7]   - SZ_PACK      Reserved. (Npcx only)
+		 */
+			inst->PBMTXBUF[0] = ((mem_len & 0xFF) << 24)
+								| ((cyc_type & 0xFF) << 8)
+								| (((mem_len >> 8) & 0x0F) << 16) ;
+		/*
+		 * Following 4 bytes of tager flash address in tx buffer
+		 * [24:31] - ADDR[0:7]   Start address of flash cycle command request
+		 * [16:23] - ADDR[15:8]
+		 * [8:15]  - ADDR[23:16]
+		 * [0:7]   - ADDR[31:24]
+		 */
+			inst->PBMTXBUF[1] = sys_cpu_to_be32((mem_addr));
+	}
+}
+
+static int espi_npcx_bm_parse_completion(const struct device *dev)
+{
+	int cycle_type;
+	struct espi_reg *const inst = HAL_INSTANCE(dev);
+
+	/*
+	 * First 4 bytes of bm cycle completion header in rx buffer
+	 *
+	 * [24:31] - LEN[0:7]     Data length of BM read request package
+	 * [20:23] - TAG          Tag of BM read
+	 * [16:19] - LEN[8:11]    Data length of BM read request package
+	 * [8:15]  - CYCLE_TYPE   Cycle type
+	 * [0:7]   - SZ_PACK      Reserved. (Npcx only)
+	 */
+	cycle_type = (inst->PBMRXBUF[0] & 0xff00) >> 8;
+	if (cycle_type == ESPI_BM_SUCCESS_WITHOUT_DATA_CYCLE_TYPE) {
+		return 0;
+	}
+
+	return -EIO;
+}
+
+static int espi_npcx_bm_parse_completion_with_data(const struct device *dev,
+						struct espi_bm_packet *pckt)
+{
+	struct espi_reg *const inst = HAL_INSTANCE(dev);
+	int cycle_type, sz_rx_payload;
+
+	/*
+	 * First 4 bytes of bm cycle completion header in rx buffer
+	 *
+		 * [24:31] - LEN[0:7]     Data length of BM read request package
+		 * [20:23] - TAG          Tag of BM read
+		 * [16:19] - LEN[8:11]    Data length of BM read request package
+		 * [8:15]  - CYCLE_TYPE   Cycle type
+		 * [0:7]   - SZ_PACK      Reserved. (Npcx only)
+	 *
+	 * The following is mem data/
+	 */
+	cycle_type = (inst->PBMRXBUF[0] & 0xff00) >> 8;
+	sz_rx_payload  = ((inst->PBMRXBUF[0] >> 24) & 0xFF) | ((inst->PBMRXBUF[0] >> 8) & 0xF00);
+	if (cycle_type == ESPI_BM_SUCCESS_WITH_DATA_CYCLE_TYPE) {
+		volatile uint32_t *rx_buf = &inst->PBMRXBUF[1];
+		uint8_t *buf = pckt->buf;
+		uint32_t data;
+
+		/* Get data from flash RX buffer */
+		for (int i = 0; i < sz_rx_payload / 4; i++, rx_buf++) {
+			data = *rx_buf;
+			for (int j = 0; j < 4; j++, buf++) {
+				*buf = data & 0xff;
+				data = data >> 8;
+			}
+		}
+
+		/* Get remaining bytes */
+		if (sz_rx_payload % 4) {
+			data = *rx_buf;
+			for (int j = 0; j < sz_rx_payload % 4; j++, buf++) {
+				*buf = data & 0xff;
+				data = data >> 8;
+			}
+		}
+
+		return 0;
+	}
+
+	return -EIO;
+}
+
+int espi_npcx_bm_read(const struct device *dev,
+			       struct espi_bm_packet *pckt, bool is64bit)
+{
+	// int ret;
+	struct espi_reg *const inst = HAL_INSTANCE(dev);
+	// struct espi_npcx_data *const data = dev->data;
+
+	/* Check BM enabled? */
+	if (!IS_BIT_SET(inst->PERCFG, NPCX_PERCFG_BMMEN)) {
+		LOG_ERR("bus master disabled");
+		return -EACCES;
+	}
+
+	/* Check out of bm received buffer size */
+	if (pckt->len > NPCX_ESPI_BM_MAX_RX_PAYLOAD) {
+		LOG_ERR("Out of BM transmitted buffer: %d", pckt->len);
+		return -EINVAL;
+	}
+
+	/* Check BM Transmit Queue is empty? */
+	if (IS_BIT_SET(inst->PERCTL, NPCX_PERCTL_BM_PC_AVAIL)) {
+		LOG_ERR("bus master is busy");
+		return -EBUSY;
+	}
+
+	/* Prepare BM_READ header in tx buffer */
+	if (is64bit) {
+		inst->PERCTL |= BIT(NPCX_PERCTL_MEM64_ACCESS);
+		espi_npcx_bm_prepare_tx_header(dev,
+						ESPI_BM_MEM64_READ_CYCLE_TYPE,
+						pckt->mem_addr,
+						pckt->len,
+						1);
+		SET_FIELD(inst->PERCTL, NPCX_PERCTL_BMPKT_LEN, 11);
+	} else {
+		inst->PERCTL &= ~BIT(NPCX_PERCTL_MEM64_ACCESS);
+		espi_npcx_bm_prepare_tx_header(dev,
+						 ESPI_BM_MEM32_READ_CYCLE_TYPE,
+						 pckt->mem_addr,
+					     pckt->len,
+						 0);
+		SET_FIELD(inst->PERCTL, NPCX_PERCTL_BMPKT_LEN, 7);
+	}
+
+	/* Set the PERCTL.PERCTL_BM_PC_AVAIL bit to 1 to enqueue the packet */
+	inst->PERCTL |= BIT(NPCX_PERCTL_BM_NP_AVAIL);
+
+	int timeout = 100;
+	do {
+		if (IS_BIT_SET(inst->ESPISTS, NPCX_ESPISTS_PBMRX))
+			break;
+		// k_msleep(1);
+		k_busy_wait(1000);
+	} while (--timeout);
+
+	if (timeout > 0) {
+		return espi_npcx_bm_parse_completion_with_data(dev, pckt);
+	} else {
+		return -ETIMEDOUT;
+	}
+
+}
+
+int espi_npcx_bm_write(const struct device *dev,
+					struct espi_bm_packet *pckt, bool is64bit)
+{
+	// int ret;
+	uint32_t tx_data;
+	struct espi_reg *const inst = HAL_INSTANCE(dev);
+	volatile uint32_t *tx_buf = NULL;
+	// struct espi_npcx_data *const data = dev->data;
+	if (is64bit) {
+		tx_buf = &inst->PBMTXBUF[3];
+	} else {
+		tx_buf = &inst->PBMTXBUF[2];
+	}
+	uint8_t *buf = pckt->buf;
+
+	/* Check BM enabled? */
+	if (!IS_BIT_SET(inst->PERCFG, NPCX_PERCFG_BMMEN)) {
+		LOG_ERR("bus master disabled");
+		return -EACCES;
+	}
+
+	/* Check out of bm received buffer size */
+	if (pckt->len > NPCX_ESPI_BM_MAX_RX_PAYLOAD) {
+		LOG_ERR("Out of BM transmitted buffer: %d", pckt->len);
+		return -EINVAL;
+	}
+
+	/* Check BM Transmit Queue is empty? */
+	if (IS_BIT_SET(inst->PERCTL, NPCX_PERCTL_BM_PC_AVAIL)) {
+		LOG_ERR("bus master is busy");
+		return -EBUSY;
+	}
+
+	/* Prepare BM_READ header in tx buffer */
+	if (is64bit) {
+		inst->PERCTL |= BIT(NPCX_PERCTL_MEM64_ACCESS);
+		espi_npcx_bm_prepare_tx_header(dev,
+						ESPI_BM_MEM64_WRITE_CYCLE_TYPE,
+						pckt->mem_addr,
+						pckt->len,
+						1);
+		SET_FIELD(inst->PERCTL, NPCX_PERCTL_BMPKT_LEN, pckt->len + 11);
+	} else {
+		inst->PERCTL &= ~BIT(NPCX_PERCTL_MEM64_ACCESS);
+		espi_npcx_bm_prepare_tx_header(dev,
+						 ESPI_BM_MEM32_WRITE_CYCLE_TYPE,
+						 pckt->mem_addr,
+					     pckt->len,
+						 0);
+		SET_FIELD(inst->PERCTL, NPCX_PERCTL_BMPKT_LEN, pckt->len + 7);
+	}
+
+	/* Put package data to flash TX buffer */
+	for (int i = 0; i < pckt->len / 4; i++, tx_buf++) {
+		tx_data = 0;
+		for (int j = 0; j < 4; j++, buf++) {
+			tx_data |= (*buf << (j * 8));
+		}
+		*tx_buf = tx_data;
+	}
+
+	/* Put remaining bytes to flash TX buffer */
+	if (pckt->len % 4) {
+		tx_data = 0;
+		for (int j = 0; j < pckt->len % 4; j++, buf++) {
+			tx_data |= (*buf << (j * 8));
+		}
+		*tx_buf = tx_data;
+	}
+
+	/* Set the PERCTL.PERCTL_BM_PC_AVAIL bit to 1 to enqueue the packet */
+	inst->PERCTL |= BIT(NPCX_PERCTL_BM_PC_AVAIL);
+
+	int timeout = 100;
+	do {
+		if (IS_BIT_SET(inst->ESPISTS, NPCX_ESPISTS_BMTXDONE))
+			break;
+		// k_msleep(1);
+		k_busy_wait(1000);
+	} while (--timeout);
+
+	if (timeout > 0) {
+		/* Parse completion package in rx buffer */
+		return espi_npcx_bm_parse_completion(dev);
+	} else {
+		return -ETIMEDOUT;
+	}
+}
+
 /* eSPI driver registration */
 static int espi_npcx_init(const struct device *dev);
 
@@ -1453,6 +1757,6 @@ static int espi_npcx_init(const struct device *dev)
 
 	/* Enable eSPI bus interrupt */
 	irq_enable(DT_INST_IRQN(0));
-
+	npcx_espi_enable_interrupts(dev);
 	return 0;
 }

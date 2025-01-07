@@ -496,6 +496,54 @@ static void espi_taf_work(struct k_work *item)
 	}
 }
 
+
+// static void espi_taf_work(struct k_work *item)
+// {
+//     struct espi_taf_npcx_data *info = CONTAINER_OF(item, struct espi_taf_npcx_data, work);
+//     int ret = 0;
+//     struct espi_taf_npcx_pckt taf_data;
+//     struct espi_saf_packet pckt_taf;
+//     struct espi_reg *const inst = HAL_INSTANCE(info->host_dev);
+//     struct espi_taf_pckt taf_pckt_l;
+//     struct npcx_taf_head taf_head;
+//     uint32_t taf_addr;
+//     uint8_t i;
+//     /* Get type, length and tag from RX buffer */
+//     memcpy(&taf_head, (void *)&inst->FLASHRXBUF[0], sizeof(taf_head));
+//     taf_pckt_l.type = taf_head.type;
+//     taf_pckt_l.len = (((uint16_t)taf_head.tag_hlen & 0xF) << 8) | taf_head.llen;
+//     taf_pckt_l.tag = taf_head.tag_hlen >> 4;
+//     taf_addr = inst->FLASHRXBUF[1];
+//     taf_pckt_l.addr = sys_cpu_to_be32(taf_addr);
+//     for (i = 0; i < 16; i++) {
+//         taf_pckt_l.src[i] = inst->FLASHRXBUF[2 + i];
+//     }
+//     taf_data.tag = taf_pckt_l.tag;
+//     taf_data.data = (uint8_t *)taf_pckt_l.src;
+//     pckt_taf.flash_addr = taf_pckt_l.addr;
+//     pckt_taf.len = taf_pckt_l.len;
+//     pckt_taf.buf = (uint8_t *)&taf_data;
+//     LOG_ERR("espi taf work: type: %x \r\n", taf_pckt_l.type);
+//     switch (taf_pckt_l.type) {
+// #if defined(CONFIG_ESPI_TAF_MANUAL_MODE)
+//     case NPCX_ESPI_TAF_REQ_READ:
+//         ret = espi_taf_npcx_flash_read(info->host_dev, &pckt_taf);
+//         break;
+// #endif
+//     case NPCX_ESPI_TAF_REQ_ERASE:
+//         ret = espi_taf_npcx_flash_erase(info->host_dev, &pckt_taf);
+//         break;
+//     case NPCX_ESPI_TAF_REQ_WRITE:
+//         ret = espi_taf_npcx_flash_write(info->host_dev, &pckt_taf);
+//         break;
+//     }
+// LOG_ERR("espi taf work result: %x \r\n", ret);
+//     if (ret != 0) {
+//         ret = espi_taf_npcx_flash_unsuccess(info->host_dev, &pckt_taf);
+//     }
+// }
+
+
 static void espi_taf_event_handler(const struct device *dev, struct espi_callback *cb,
 				   struct espi_event event)
 {
