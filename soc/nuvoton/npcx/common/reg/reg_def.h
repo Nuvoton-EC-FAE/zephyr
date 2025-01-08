@@ -2023,12 +2023,12 @@ struct i3c_reg {
 #define MCTRL_IBIRESP_ACK_MANDATORY 2 /* ACK with mandatory byte  */
 #define MCTRL_IBIRESP_MANUAL        3
 
-/* For REQUEST = EmitStartAddr */
-enum npcx_i3c_mctrl_type {
-	NPCX_I3C_MCTRL_TYPE_I3C,
-	NPCX_I3C_MCTRL_TYPE_I2C,
-	NPCX_I3C_MCTRL_TYPE_I3C_HDR_DDR,
-};
+// /* For REQUEST = EmitStartAddr */
+// enum npcx_i3c_mctrl_type {
+// 	NPCX_I3C_MCTRL_TYPE_I3C,
+// 	NPCX_I3C_MCTRL_TYPE_I2C,
+// 	NPCX_I3C_MCTRL_TYPE_I3C_HDR_DDR,
+// };
 
 /* For REQUEST = ForceExit/Target Reset */
 #define MCTRL_TYPE_HDR_EXIT    0

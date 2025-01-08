@@ -187,6 +187,32 @@ bool npcx_miwu_irq_get_and_clear_pending(const struct npcx_wui *wui);
  * @retval 0 If successful
  * @retval -EINVAL Invalid parameters
  */
+/**
+ * @brief Get interrupt pending bit of the wake-up input source
+ *
+ * @param wui A pointer on wake-up input source
+ *
+ * @retval 1 if interrupt is pending
+ */
+bool npcx_miwu_irq_get_pending(const struct npcx_wui *wui);
+
+/**
+ * @brief  clear interrupt pending bit of the wake-up input source
+ *
+ * @param wui A pointer on wake-up input source
+ */
+void npcx_miwu_irq_clear_pending(const struct npcx_wui *wui);
+
+/**
+ * @brief Configure interrupt type of the wake-up input source
+ *
+ * @param wui Pointer to wake-up input source for configuring
+ * @param mode Interrupt mode supported by NPCX MIWU
+ * @param trig Interrupt trigger mode supported by NPCX MIWU
+ *
+ * @retval 0 If successful
+ * @retval -EINVAL Invalid parameters
+ */
 int npcx_miwu_interrupt_configure(const struct npcx_wui *wui,
 		enum miwu_int_mode mode, enum miwu_int_trig trig);
 
