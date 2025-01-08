@@ -214,7 +214,7 @@ static void npcx_itim_evt_isr(const struct device *dev)
 }
 
 #if defined(CONFIG_PM)
-static inline uint32_t npcx_itim_get_evt_cyc32(void)
+uint32_t npcx_itim_get_evt_cyc32(void)
 {
 	uint32_t cnt1, cnt2;
 
