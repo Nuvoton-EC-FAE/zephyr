@@ -172,6 +172,12 @@ struct npcx_clk_cfg {
 #define VAL_HFCBCD3 MCLKD_SL
 
 /**
+ * @brief Function to get current value of 0f 32-bit counter of event timer.
+ *
+ */
+uint32_t npcx_itim_get_evt_cyc32(void);
+
+/**
  * @brief Function to notify clock driver that backup the counter value of
  *        low-frequency timer before ec entered deep idle state.
  */
@@ -206,6 +212,15 @@ void npcx_clock_control_turn_on_system_sleep(bool is_deep, bool is_instant);
  * @brief Function to turn off system sleep mode.
  */
 void npcx_clock_control_turn_off_system_sleep(void);
+
+/**
+ * @brief Function to enables ADC module to select the low-frequency clock
+ *        before entering to Idle/Deep-Idle mode and select the core clock
+ *        after exiting from DIdle/eep-Idle mode.
+ * 
+ * @param enable A boolean indicating the low-frequency clock is selected
+ */
+void npcx_clock_control_adc_low_freq_clock_select(bool enable);
 
 #ifdef __cplusplus
 }
