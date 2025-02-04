@@ -106,9 +106,9 @@ struct npcx_clk_cfg {
 #endif /* CONFIG_CLOCK_CONTROL_NPCX_SUPP_FIU1 */
 
 /* I3C clock divider */
-#if (MHZ(120) <= OFMCLK) /* MCLAD must between 40 mhz to 50 mhz*/
+#if (OFMCLK == MHZ(120)) /* MCLkD must between 40 mhz to 50 mhz*/
 #define MCLKD_SL 2    /* I3C_CLK = (MCLK / 3) */
-#elif (MHZ(80) <= OFMCLK) /* MCLAD must between 40 mhz to 50 mhz*/
+#elif (OFMCLK <= MHZ(100) && OFMCLK >= MHZ(80))
 #define MCLKD_SL 1    /* I3C_CLK = (MCLK / 2) */
 #else
 #define MCLKD_SL 0    /* I3C_CLK = MCLK */

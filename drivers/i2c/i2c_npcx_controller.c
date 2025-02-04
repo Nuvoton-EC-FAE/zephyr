@@ -173,7 +173,9 @@ struct i2c_ctrl_data {
 	uint8_t port; /* current port used the controller */
 	bool is_configured; /* is port configured? */
 	const struct npcx_i2c_timing_cfg *ptr_speed_confs;
+#ifdef CONFIG_PM_DEVICE
 	struct miwu_callback sbd_callback;
+#endif
 #ifdef CONFIG_I2C_TARGET
 	struct i2c_target_config *target_cfg[NPCX_I2C_FLAG_COUNT];
     uint8_t target_idx;
@@ -1419,6 +1421,7 @@ out:
 #ifdef CONFIG_PM_DEVICE
 static void npcx_i2c_wui_callback(const struct device *dev, struct npcx_wui *wui)
 {
+	const struct i2c_ctrl_config *const config = dev->config;
 	struct i2c_ctrl_data *const data = dev->data;
 	struct smb_reg *const inst = HAL_I2C_INSTANCE(dev);
 	struct glue_reg *inst_glue = (struct glue_reg *) NPCX_GLUE_REG_ADDR;
@@ -1427,9 +1430,11 @@ static void npcx_i2c_wui_callback(const struct device *dev, struct npcx_wui *wui
 
 	LOG_INF("I2C MIWU Interrupt callback: port: %x", data->port);
 
-        /* Disable Event assertion */
+	npcx_miwu_irq_get_and_clear_pending(&config->sbd_wui);
+
+    /* Disable Event assertion */
 	inst_glue->SMB_EEN &= ~BIT(data->port >> 4);
-        /* Clear Start condition detection */
+    /* Clear Start condition detection */
 	inst_glue->SMB_SBD |= BIT(data->port >> 4);
 
 	/* Enable SMB interrupt and 'New Address Match' interrupt source */
@@ -1452,22 +1457,20 @@ void npcx_i2c_wakeup_enable(const struct device *dev, bool enable)
 
 		/* Configure MIWU setting and enable its interrupt */
 		npcx_miwu_interrupt_configure(&config->sbd_wui, NPCX_MIWU_MODE_EDGE, NPCX_MIWU_TRIG_HIGH);
-		npcx_miwu_irq_get_and_clear_pending(&config->sbd_wui);
 		npcx_miwu_irq_enable(&config->sbd_wui);
 
-                /* Clear Start condition detection */
+        /* Clear Start condition detection */
 		inst_glue->SMB_SBD |= BIT(data->port >> 4);
-        	/* Enable Event assertion */
+        /* Enable Event assertion */
 		inst_glue->SMB_EEN |= BIT(data->port >> 4);
-        	/* Enable start detect in IDLE */
+        /* Enable start detect in IDLE */
 		inst->SMBCTL3 |= BIT(NPCX_SMBCTL3_IDL_START);
 	} else {
-		npcx_miwu_irq_get_and_clear_pending(&config->sbd_wui);
 		npcx_miwu_irq_disable(&config->sbd_wui);
 
-                /* Disable Event assertion */
+        /* Disable Event assertion */
 		inst_glue->SMB_EEN &= ~BIT(data->port >> 4);
-        	/* Disable start detect in IDLE */
+        /* Disable start detect in IDLE */
 		inst->SMBCTL3 &= ~BIT(NPCX_SMBCTL3_IDL_START);
 	}
 }
