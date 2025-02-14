@@ -175,6 +175,9 @@ static int pwm_npcx_init(const struct device *dev)
 	const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
 	int ret;
 
+	/* Disable PWM before configuring. */
+	inst->PWMCTL &= ~BIT(NPCX_PWMCTL_PWR);
+
 	/*
 	 * NPCX PWM module mixes byte and word registers together. Make sure
 	 * word reg access via structure won't break into two byte reg accesses

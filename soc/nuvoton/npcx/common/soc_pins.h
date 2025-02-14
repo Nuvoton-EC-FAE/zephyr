@@ -85,6 +85,13 @@ bool npcx_lvol_get_detect_level(int lvol_ctrl, int lvol_bit);
  */
 void npcx_host_interface_sel(enum npcx_hif_type hif_type);
 
+/**
+ * @brief Select the I3C module as target mode
+ *
+ * @param enable true to enable target mode, false to controller mode.
+ */
+void npcx_i3c_target_sel(int module, bool enable);
+
 #ifdef __cplusplus
 }
 #endif
