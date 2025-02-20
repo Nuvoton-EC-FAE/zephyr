@@ -40,10 +40,12 @@ static void kscan_input_cb(const struct device *dev, struct input_event *evt)
 	}
 
 	if (evt->sync) {
-		LOG_DBG("input event: %3d %3d %d",
-			data->row, data->col, data->pressed);
-		if (data->callback) {
-			data->callback(dev, data->row, data->col, data->pressed);
+		if (data->enabled) {
+			LOG_DBG("input event: %3d %3d %d",
+				data->row, data->col, data->pressed);
+			if (data->callback) {
+				data->callback(dev, data->row, data->col, data->pressed);
+			}
 		}
 	}
 }
