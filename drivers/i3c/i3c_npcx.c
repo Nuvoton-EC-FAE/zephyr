@@ -2806,6 +2806,56 @@ static int npcx_i3c_pm_action(const struct device *dev, enum pm_device_action ac
 }
 #endif /* CONFIG_PM_DEVICE */
 
+struct i3c_dev_attached_list *npcx_i3c_get_device_attached_list(const struct device *dev)
+{
+	struct npcx_i3c_data *data = dev->data;
+	struct i3c_dev_attached_list *dev_list = &data->common.attached_dev;
+
+	return dev_list;
+}
+
+int npcx_i3c_slave_set_static_addr(const struct device *dev, uint8_t static_addr)
+{
+	const struct npcx_i3c_config *config = dev->config;
+	struct i3c_reg *inst = config->base;
+
+	SET_FIELD(inst->CONFIG, NPCX_I3C_CONFIG_SADDR, config->static_address);
+
+	return 0;
+}
+
+int npcx_i3c_slave_get_dynamic_addr(const struct device *dev, uint8_t *dynamic_addr)
+{
+	const struct npcx_i3c_config *config = dev->config;
+	struct i3c_reg *inst = config->base;
+
+	if (!IS_BIT_SET(inst->DYNADDR, NPCX_I3C_DYNADDR_DAVALID)) {
+		return -1;
+	}
+
+	*dynamic_addr = GET_FIELD(inst->DYNADDR, NPCX_I3C_DYNADDR_DADDR);
+	return 0;
+}
+
+int npcx_i3c_slave_get_event_enabling(const struct device *dev, uint32_t *event_en)
+{
+	const struct npcx_i3c_config *config = dev->config;
+	struct i3c_reg *inst = config->base;
+
+	*event_en = 0;
+	if (!IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_IBIDIS)) {
+		*event_en |= I3C_SLAVE_EVENT_SIR;
+	}
+	if (!IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_MRDIS)) {
+		*event_en |= I3C_SLAVE_EVENT_MR;
+	}
+	if (!IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_HJDIS)) {
+		*event_en |= I3C_SLAVE_EVENT_HJ;
+	}
+
+	return 0;
+}
+
 static int npcx_i3c_init(const struct device *dev)
 {
 	const struct npcx_i3c_config *config = dev->config;
