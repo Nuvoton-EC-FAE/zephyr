@@ -283,7 +283,8 @@ static int uart_npcx_irq_tx_complete(const struct device *dev)
 	struct uart_reg *const inst = config->inst;
 
 	/* Tx FIFO is empty or last byte is sending */
-	return IS_BIT_SET(inst->UFTSTS, NPCX_UFTSTS_NXMIP);
+	return IS_BIT_SET(inst->UFTSTS, NPCX_UFTSTS_NXMIP) && !IS_BIT_SET(inst->UFTCTL, NPCX_UFTCTL_NXMIP_EN) &&
+	       IS_BIT_SET(inst->UFTSTS, NPCX_UFTSTS_TFIFO_EMPTY_STS) && !IS_BIT_SET(inst->UFTCTL, NPCX_UFTCTL_TEMPTY_EN);
 }
 
 static void uart_npcx_irq_rx_enable(const struct device *dev)
