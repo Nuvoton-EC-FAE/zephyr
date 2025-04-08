@@ -152,7 +152,7 @@ static int npcx_itim_start_evt_tmr_by_tick(int32_t ticks)
 	} else {
 		uint64_t next_cycs;
 		uint64_t curr = npcx_itim_get_sys_cyc64();
-		uint32_t dcycles;
+		uint64_t dcycles;
 
 		if (ticks <= 0) {
 			ticks = 1;
