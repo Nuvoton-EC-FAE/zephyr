@@ -196,7 +196,7 @@ static void npcx_itim_evt_isr(const struct device *dev)
 		uint64_t curr = npcx_itim_get_sys_cyc64();
 		uint32_t delta_ticks = (uint32_t)((curr - cyc_sys_announced) / SYS_CYCLES_PER_TICK);
 
-		cyc_sys_announced += delta_ticks * SYS_CYCLES_PER_TICK;
+		cyc_sys_announced += (uint64_t) delta_ticks * (uint64_t) SYS_CYCLES_PER_TICK;
 		last_ticks += delta_ticks;
 		last_elapsed = 0;
 		k_spin_unlock(&lock, key);
