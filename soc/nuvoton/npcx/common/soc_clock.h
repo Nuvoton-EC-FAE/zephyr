@@ -171,6 +171,20 @@ struct npcx_clk_cfg {
 /* I3C1~I3C3 share the same configuration */
 #define VAL_HFCBCD3 MCLKD_SL
 
+/* PMC Disable in Idle enumerator */
+enum npcx_disidl_ctl_module {
+	/* DISIDL_CTL register fields */
+	NPCX_DISIDL_CTL_MODULE_ACC     = 0x07,
+	NPCX_DISIDL_CTL_MODULE_ROM     = 0x06,
+	NPCX_DISIDL_CTL_MODULE_RAM     = 0x05,
+	NPCX_DISIDL_CTL_MODULE_SPIP    = 0x04,
+	NPCX_DISIDL_CTL_MODULE_PECI    = 0x02,
+	/* DISIDL_CTL1 register fields */
+	NPCX_DISIDL_CTL_MODULE_SHM_ACC = 0x17,
+	NPCX_DISIDL_CTL_MODULE_FIU1    = 0x15,
+	NPCX_DISIDL_CTL_MODULE_FIU0    = 0x14
+};
+
 /**
  * @brief Function to get current value of 0f 32-bit counter of event timer.
  *
@@ -221,6 +235,21 @@ void npcx_clock_control_turn_off_system_sleep(void);
  * @param enable A boolean indicating the low-frequency clock is selected
  */
 void npcx_clock_control_adc_low_freq_clock_select(bool enable);
+
+/**
+ * @brief Function to disable the selected module during chip Idle.
+ *
+ * @param module The module to be disabled/power down during Idle.
+ * @param enable A boolean indicating the module clock is enable during idle
+ */
+void npcx_clock_control_disable_idle_clock(uint8_t module, bool enable);
+
+/**
+ * @brief Function to block the AHB6 clock.
+ *
+ * @param enable A boolean indicating the AHB6 clock is enabled
+ */
+void npcx_clock_control_enable_ahb6_clock(bool enable);
 
 #ifdef __cplusplus
 }

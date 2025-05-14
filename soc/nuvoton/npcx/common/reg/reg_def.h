@@ -110,6 +110,8 @@ struct cdcg_reg {
 
 #define NPCX_LFCGCTL2_XT_OSC_SL_EN            6
 
+#define NPCX_HFCBCD_AHB6CLK_BLK               1
+
 #define NPCX_HFCBCD3_I3C_MCLKD1_SL            0
 #define NPCX_HFCBCD3_I3C_MCLKD2_SL            1
 #define NPCX_HFCBCD3_I3C_MCLKD3_SL            2

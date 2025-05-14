@@ -155,8 +155,46 @@ void npcx_clock_control_adc_low_freq_clock_select(bool enable)
 	} else {
 		inst_pmc->ENIDL_CTL &= ~(BIT(NPCX_ENSLP_CTL_ADC_IREF_LFSL) | BIT(NPCX_ENSLP_CTL_ADC_EREF_LFSL));
 	}
+	arch_nop();
 
 	while(IS_BIT_SET(inst_pmc->ENIDL_CTL, NPCX_ENIDL_CTL_ADC_ACC_DIS) != enable) ;
+}
+
+void npcx_clock_control_disable_idle_clock(uint8_t module, bool enable)
+{
+	const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
+	struct pmc_reg *const inst_pmc = HAL_PMC_INST(clk_dev);
+	uint8_t index = (module >> 4);
+	uint8_t bit = (module & 0x0F);
+
+	if(enable) {
+		if (index == 0) {
+			inst_pmc->DISIDL_CTL &= ~BIT(bit);
+		}
+		else if (index == 1) {
+			inst_pmc->DISIDL_CTL1 &= ~BIT(bit);
+		}
+	} else {
+		if (index == 0) {
+			inst_pmc->DISIDL_CTL |= BIT(bit);
+		}
+		else if (index == 1) {
+			inst_pmc->DISIDL_CTL1 |= BIT(bit);
+		}
+	}
+	arch_nop();
+}
+
+void npcx_clock_control_enable_ahb6_clock(bool enable)
+{
+	const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
+	struct cdcg_reg *const inst_cdcg = HAL_CDCG_INST(clk_dev);
+
+	if(enable) {
+		inst_cdcg->HFCBCD &= ~BIT(NPCX_HFCBCD_AHB6CLK_BLK);
+	} else {
+		inst_cdcg->HFCBCD |= BIT(NPCX_HFCBCD_AHB6CLK_BLK);
+	}
 }
 
 #endif /* CONFIG_PM */
