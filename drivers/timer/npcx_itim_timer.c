@@ -370,6 +370,12 @@ static int sys_clock_driver_init(void)
 	}
 
 	/*
+	 * Step 0. Disable event timer and system timer before configure the clock rate.
+	 */
+	sys_tmr->ITCTS64 &= ~BIT(NPCX_ITCTSXX_ITEN);
+	evt_tmr->ITCTS32 &= ~BIT(NPCX_ITCTSXX_ITEN);
+
+	/*
 	 * Step 1. Use a ITIM64 timer as system kernel timer for counting.
 	 * Configure 64-bit timer counter and its prescaler to 1 first.
 	 */
