@@ -87,4 +87,28 @@ int adc_npcx_threshold_ctrl_set_param(const struct device *dev,
 int adc_npcx_threshold_ctrl_enable(const struct device *dev, uint8_t th_sel,
 				   const bool enable);
 
+/**
+ * @brief Enables/Disables ADC threshold interruption.
+ *
+ * @param dev       Pointer to the device structure for the driver instance.
+ * @param th_sel    Threshold selected.
+ * @param enable    Enable or disables threshold interruption.
+ *
+ * @returns 0 on success, negative error code otherwise.
+ *            all parameters must be configure prior enabling threshold
+ *            interruption, otherwhise error will be returned.
+ */
+ int adc_npcx_threshold_setup(const struct device *dev, uint8_t th_sel,
+			const bool enable);
+
+/**
+ * @brief Enables/Disables ADC threshold wake-up interrupt.
+ *
+ * @param dev       Pointer to the device structure for the driver instance.
+ * @param enable    Enable or disables threshold interruption.
+ */
+#ifdef CONFIG_PM
+void adc_npcx_threshold_wakeup_enable(const struct device *dev, bool enable);
+#endif
+
 #endif /*_ADC_NPCX_THRESHOLD_H_ */
