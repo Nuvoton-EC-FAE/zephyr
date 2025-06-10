@@ -247,7 +247,7 @@ static void adc_npcx_isr(const struct device *dev)
 		adc_context_on_sampling_done(&data->ctx, data->adc_dev);
 	}
 
-	if (!(IS_ENABLED(CONFIG_ADC_CMP_NPCX) && t_data->active_thresholds)) {
+	if (!t_data->active_thresholds) {
 		return;
 	}
 	uint16_t thrcts;
