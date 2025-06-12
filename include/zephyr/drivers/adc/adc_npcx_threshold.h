@@ -34,6 +34,17 @@ struct adc_npcx_threshold_param {
 	uint32_t val;
 };
 
+struct adc_npcx_threshold_trigger_info {
+	/* threshold channel number */
+	uint8_t th_chn;
+	/* ADC channel number for which the measured data is compared for threshold data. */
+	uint8_t chnsel;
+	/* relation between measured value and assetion threshold value. */
+	bool l_h;
+	/* the threshold value to which measured data is compared. */
+	uint16_t thrval;
+};
+
 /**
  * @brief Convert input value in millivolts to corresponding threshold register
  * value.
@@ -100,6 +111,15 @@ int adc_npcx_threshold_ctrl_enable(const struct device *dev, uint8_t th_sel,
  */
  int adc_npcx_threshold_setup(const struct device *dev, uint8_t th_sel,
 			const bool enable);
+/**
+ * @brief Get the threshold trigger information. 
+ * 
+ * @param dev     Pointer to the device structure for the driver instance.
+ * @param info    Pointer to the structure to hold the threshold trigger information.
+ *
+ * @returns  0 on success, negative error code otherwise.
+ */
+int adc_npcx_get_threshold_trigger_info(const struct device *dev, struct adc_npcx_threshold_trigger_info *info);
 
 /**
  * @brief Enables/Disables ADC threshold wake-up interrupt.
