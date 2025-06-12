@@ -95,6 +95,8 @@ struct adc_npcx_threshold_data {
 	/* This array holds current configuration for each threshold. */
 	struct adc_npcx_threshold_control
 			control[DT_INST_PROP(0, threshold_count)];
+
+	struct adc_npcx_threshold_trigger_info trigger_info;
 };
 
 /* Driver data */
@@ -261,6 +263,13 @@ static void adc_npcx_isr(const struct device *dev)
 			/* Clear threshold status */
 			thrcts |= BIT(i);
 			inst->THRCTS = thrcts;
+
+			/* save the infomation of threshold trigger event */
+			t_data->trigger_info.th_chn = i;
+			t_data->trigger_info.chnsel = t_data->control[i].chnsel;
+			t_data->trigger_info.l_h = t_data->control[i].l_h;
+			t_data->trigger_info.thrval = t_data->control[i].thrval;
+
 			if (t_data->control[i].work) {
 				/* Notify work thread */
 				k_work_submit_to_queue(work_q ? work_q : &k_sys_work_q,
@@ -828,6 +837,21 @@ int adc_npcx_threshold_setup(const struct device *dev, uint8_t th_sel,
 
 	adc_context_release(&data->ctx, 0);
 	return ret;
+}
+
+int adc_npcx_get_threshold_trigger_info(const struct device *dev, struct adc_npcx_threshold_trigger_info *info)
+{
+	struct adc_npcx_data *const data = dev->data;
+	struct adc_npcx_threshold_data *const t_data = data->threshold_data;
+
+	if (info == NULL) {
+		return -EINVAL;
+	}
+
+	memcpy(info, &t_data->trigger_info,
+			sizeof(struct adc_npcx_threshold_trigger_info));
+
+	return 0;
 }
 
 #ifdef CONFIG_PM
