@@ -30,6 +30,12 @@ enum ncl_sha_type {
 	NCL_SHA_TYPE_NUM
 };
 
+struct ncl_sha_hmac_key
+{
+    const uint8_t	*key;
+    uint32_t       	keyLen;
+};
+
 /*
  * This enum defines the security strengths supported by this DRBG mechanism.
  * The internally generated entropy and nonce sizes are derived from these

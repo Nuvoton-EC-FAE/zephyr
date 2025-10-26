@@ -44,12 +44,31 @@ struct npcx_ncl_sha {
 	/* Return the SHA result (digest.) */
 	enum ncl_status (*finish)(void *ctx, uint8_t *hashDigest);
 	/* Perform a complete SHA calculation */
-	enum ncl_status (*calc)(void *ctx, enum ncl_sha_type type, const uint8_t *data,
+	enum ncl_status (*calc)(void *ctx, int module_num, enum ncl_sha_type type, const uint8_t *data,
 				uint32_t Len, uint8_t *hashDigest);
 	/* Power on/off the SHA module. */
 	enum ncl_status (*power)(void *ctx, uint8_t enable);
 	/* Reset the SHA hardware and terminate any in-progress operations. */
 	enum ncl_status (*reset)(void *ctx);
+	/*
+	 * Prepare the context buffer for a HMAC calculation -  by loading the
+	 * initial SHA-256/384/512 parameters.
+	 */
+	enum ncl_status (*hmac_start)(void *ctx, enum ncl_sha_type type, const struct ncl_sha_hmac_key *key,
+				       uint8_t *padKey);
+	/*
+	 * Updates the HMAC calculation with the additional data. When the
+	 * function returns, the hardware and memory buffer shall be ready to
+	 * accept new data * buffers for HMAC calculation and changes to the data
+	 * in data buffer should no longer effect the HMAC calculation.
+	 */
+	enum ncl_status (*hmac_update)(void *ctx, const uint8_t *data, uint32_t Len);
+	/* Return the HMAC result */
+	enum ncl_status (*hmac_finish)(void *ctx, uint8_t *padKey, uint8_t *hmac);
+	/* Perform a complete HMAC calculation */
+	enum ncl_status (*hmac_calc)(void *ctx, enum ncl_sha_type type,
+			const struct ncl_sha_hmac_key *key, const uint8_t *data,
+			uint32_t Len, uint8_t *hmac);
 };
 
 /* The start address of the SHA API table. */
@@ -132,11 +151,61 @@ static int npcx_sha_compute(struct hash_ctx *ctx, struct hash_pkt *pkt, bool fin
 	return 0;
 }
 
+int npcx_hmac_compute(const struct device *dev,
+			struct hash_ctx *ctx,
+			const uint8_t *key,
+			uint32_t key_len,
+			const uint8_t *msg,
+			uint8_t msg_len,
+			uint8_t *hmac)
+{
+	struct npcx_sha_session *npcx_session = ctx->drv_sessn_state;
+	struct npcx_sha_context *npcx_ctx = &npcx_session->npcx_sha_ctx;
+	enum ncl_status ret;
+	struct ncl_sha_hmac_key	hmac_key;
+	enum ncl_sha_type sha_type;
+
+	switch (npcx_session->algo) {
+		case CRYPTO_HASH_ALGO_SHA256:
+			sha_type = NCL_SHA_TYPE_2_256;
+			break;
+		case CRYPTO_HASH_ALGO_SHA384:
+			sha_type = NCL_SHA_TYPE_2_384;
+			break;
+		case CRYPTO_HASH_ALGO_SHA512:
+			sha_type = NCL_SHA_TYPE_2_512;
+			break;
+		default:
+			LOG_ERR("Unexpected algo: %d", npcx_session->algo);
+			return -EINVAL;
+	}
+
+	hmac_key.key = key;
+	hmac_key.keyLen = key_len;
+
+	ret = NPCX_NCL_SHA->hmac_calc(npcx_ctx->handle, sha_type,
+								(const struct ncl_sha_hmac_key *) &hmac_key,
+								msg, msg_len, hmac);
+	if (ret != NCL_STATUS_OK) {
+		LOG_ERR("Could not compute the hmac, err:%d", ret);
+		return -EINVAL;
+	}
+
+	ret = NPCX_NCL_SHA->finalize_context(npcx_ctx->handle);
+	if (ret != NCL_STATUS_OK) {
+		LOG_ERR("Could not finalize the context, err:%d", ret);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 static int npcx_hash_session_setup(const struct device *dev, struct hash_ctx *ctx,
 				   enum hash_algo algo)
 {
 	int ctx_idx;
 	struct npcx_sha_context *npcx_ctx;
+	enum ncl_status status;
 
 	if (ctx->flags & ~(NPCX_HASH_CAPS_SUPPORT)) {
 		LOG_ERR("Unsupported flag");
@@ -162,25 +231,64 @@ static int npcx_hash_session_setup(const struct device *dev, struct hash_ctx *ct
 	ctx->hash_hndlr = npcx_sha_compute;
 
 	npcx_ctx = &npcx_sessions[ctx_idx].npcx_sha_ctx;
-	NPCX_NCL_SHA->init_context(npcx_ctx->handle);
-	NPCX_NCL_SHA->power(npcx_ctx->handle, 1);
-	NPCX_NCL_SHA->init(npcx_ctx->handle);
-	NPCX_NCL_SHA->reset(npcx_ctx->handle);
+	status = NPCX_NCL_SHA->init_context(npcx_ctx->handle);
+	if (status != NCL_STATUS_OK) {
+		LOG_ERR("fail to initial SHA context, err:%d", status);
+		return -EINVAL;
+	}
+
+	status = NPCX_NCL_SHA->power(npcx_ctx->handle, 1);
+	if (status != NCL_STATUS_OK) {
+		LOG_ERR("fail to power on the SHA module, err:%d", status);
+		return -ENOSR;
+	}
+
+	status = NPCX_NCL_SHA->init(npcx_ctx->handle);
+	if (status != NCL_STATUS_OK) {
+		LOG_ERR("fail to initiate the SHA hardware module, err:%d", status);
+		return -ENOSR;
+	}
+
+	status = NPCX_NCL_SHA->reset(npcx_ctx->handle);
+	if (status != NCL_STATUS_OK) {
+		LOG_ERR("fail to reset the SHA hardware, err:%d", status);
+		return -ENOSR;
+	}
 
 	return 0;
 }
 
 static int npcx_hash_session_free(const struct device *dev, struct hash_ctx *ctx)
 {
+	int ret = 0;
+	enum ncl_status status;
 	struct npcx_sha_session *npcx_session = ctx->drv_sessn_state;
 	struct npcx_sha_context *npcx_ctx = &npcx_session->npcx_sha_ctx;
 
-	NPCX_NCL_SHA->reset(npcx_ctx->handle);
-	NPCX_NCL_SHA->power(npcx_ctx->handle, 0);
-	NPCX_NCL_SHA->finalize_context(npcx_ctx->handle);
-	npcx_session->in_use = false;
+	status = NPCX_NCL_SHA->power(npcx_ctx->handle, 0);
+	if (status != NCL_STATUS_OK) {
+		LOG_ERR("fail to power off the SHA module, err:%d", status);
+		ret = -ENOSR;
+		goto exit;
+	}
 
-	return 0;
+	status = NPCX_NCL_SHA->reset(npcx_ctx->handle);
+	if (status != NCL_STATUS_OK) {
+		LOG_ERR("fail to reset the SHA hardware, err:%d", status);
+		ret =  -ENOSR;
+		goto exit;
+	}
+
+	status = NPCX_NCL_SHA->finalize_context(npcx_ctx->handle);
+	if (status != NCL_STATUS_OK) {
+		LOG_ERR("fail to finalize SHA context, err:%d", status);
+		ret = -ENOSR;
+		goto exit;
+	}
+
+exit:
+	npcx_session->in_use = false;
+	return ret;
 }
 
 static int npcx_query_caps(const struct device *dev)
