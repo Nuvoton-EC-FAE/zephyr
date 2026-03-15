@@ -2700,6 +2700,96 @@ static int npcx_i3c_target_config(const struct device *dev)
 	return 0;
 }
 
+int npcx_i3c_activate(const struct device *dev, bool enable)
+{
+	const struct npcx_i3c_config *const config = dev->config;
+	struct npcx_i3c_data *data = dev->data;
+	const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
+	struct i3c_reg *inst = config->base;
+	int ret = 0;
+
+	if (enable) {
+		ret = clock_control_on(clk_dev,	(clock_control_subsys_t) &config->clock_subsys);
+		if (ret != 0) {
+			LOG_ERR("Turn on %s clock fail.", dev->name);
+			return ret;
+		}
+#ifdef CONFIG_I3C_NPCX_DMA
+		ret = clock_control_on(clk_dev,	(clock_control_subsys_t) &config->mdma_clk_subsys);
+		if (ret != 0) {
+			LOG_ERR("Turn on %s clock fail.", dev->name);
+			return ret;
+		}
+#endif
+
+		if(config->target_mode == true) {
+			/* enable as capable mode for target */
+			SET_FIELD(inst->MCONFIG, NPCX_I3C_MCONFIG_CTRENA, MCONFIG_CTRENA_CAPABLE);
+
+			/* enable the target interrupt events */
+			inst->CONFIG |= BIT(NPCX_I3C_CONFIG_TGTENA);
+			npcx_i3c_enable_target_interrupt(dev, true);
+		}
+		else
+		{
+			/* enable the master */
+			SET_FIELD(inst->MCONFIG, NPCX_I3C_MCONFIG_CTRENA, MCONFIG_CTRENA_ON);
+		}
+	} else {
+		if (get_oper_state(dev) != NPCX_I3C_IDLE) {
+			LOG_ERR("Device %s state is not idle: %d", dev->name, data->oper_state);
+			return -ECANCELED;
+		}
+
+		/* the I3C bus is still busy now */
+		if (IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_STNOTSTOP)) {
+			LOG_ERR("Device %s bus is busy", dev->name);
+			return -ECANCELED;
+		}
+
+		if(config->target_mode == true) {
+			/* disable the target DMA */
+			SET_FIELD(inst->DMACTRL, NPCX_I3C_DMACTRL_DMATB, MDMA_DMATB_DISABLE);
+			SET_FIELD(inst->DMACTRL, NPCX_I3C_DMACTRL_DMAFB, MDMA_DMAFB_DISABLE);
+			/* flush the data target FIFO and clear the status */
+			inst->DATACTRL |= BIT(NPCX_I3C_DATACTRL_FLUSHTB) | BIT(NPCX_I3C_DATACTRL_FLUSHFB);
+			inst->STATUS = inst->STATUS;
+			inst->ERRWARN = inst->ERRWARN;
+			/* disable the target interrupt events */
+			inst->CONFIG &= ~BIT(NPCX_I3C_CONFIG_TGTENA);
+			npcx_i3c_enable_target_interrupt(dev, false);
+		}
+
+		/* disable the master DMA */
+		SET_FIELD(inst->MDMACTRL, NPCX_I3C_MDMACTRL_DMAFB, MDMA_DMAFB_DISABLE);
+		SET_FIELD(inst->MDMACTRL, NPCX_I3C_MDMACTRL_DMATB, MDMA_DMATB_DISABLE);
+		/* disable master interrupts and clear statuses */
+		npcx_i3c_interrupt_all_disable(inst);
+		npcx_i3c_status_clear_all(inst);
+		npcx_i3c_errwarn_clear_all(inst);
+		npcx_i3c_fifo_flush(inst);
+		/* disable the master */
+		SET_FIELD(inst->MCONFIG, NPCX_I3C_MCONFIG_CTRENA, MCONFIG_CTRENA_OFF);
+
+		ret = clock_control_off(clk_dev, (clock_control_subsys_t) &config->clock_subsys);
+		if (ret != 0) {
+			LOG_ERR("Turn off %s clock fail.", dev->name);
+			return ret;
+		}
+
+#ifdef CONFIG_I3C_NPCX_DMA
+		ret = clock_control_off(clk_dev, (clock_control_subsys_t) &config->mdma_clk_subsys);
+		if (ret != 0) {
+			LOG_ERR("Turn off %s clock fail.", dev->name);
+			return ret;
+		}
+#endif
+	}
+
+	return ret;
+}
+
+
 #ifdef CONFIG_PM_DEVICE
 static void npcx_i3c_wui_callback(const struct device *dev, struct npcx_wui *wui)
 {
@@ -2738,7 +2828,7 @@ void npcx_i3c_wakeup_enable(const struct device *dev, bool enable, uint8_t index
 static int npcx_i3c_pm_action(const struct device *dev, enum pm_device_action action)
 {
 	const struct npcx_i3c_config *const config = dev->config;
-	const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
+	//const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
 	struct i3c_reg *inst = config->base;
 	int ret = 0;
 
@@ -2754,21 +2844,14 @@ static int npcx_i3c_pm_action(const struct device *dev, enum pm_device_action ac
 				npcx_i3c_wakeup_enable(dev, false, NPCX_I3C_WUI_RSTW, NPCX_MIWU_TRIG_HIGH);
 			}
 		} else {
-			ret = clock_control_on(clk_dev,	(clock_control_subsys_t) &config->clock_subsys);
-			if (ret != 0) {
-				LOG_ERR("Turn on %s clock fail.", dev->name);
-				return ret;
-			}
-#ifdef CONFIG_I3C_NPCX_DMA
-			ret = clock_control_on(clk_dev,	(clock_control_subsys_t) &config->mdma_clk_subsys);
-			if (ret != 0) {
-				LOG_ERR("Turn on %s clock fail.", dev->name);
-				return ret;
-			}
-#endif
+			ret = npcx_i3c_activate(dev, true);
 		}
 	break;
 	case PM_DEVICE_ACTION_SUSPEND:
+		if (get_oper_state(dev) != NPCX_I3C_IDLE) {
+			return -ECANCELED;
+		}
+
 		/* the I3C bus is still busy now */
 		if (IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_STNOTSTOP)) {
 			return -ECANCELED;
@@ -2784,18 +2867,7 @@ static int npcx_i3c_pm_action(const struct device *dev, enum pm_device_action ac
 				npcx_i3c_wakeup_enable(dev, true, NPCX_I3C_WUI_RSTW, NPCX_MIWU_TRIG_HIGH);
 			}
 		} else {
-			ret = clock_control_off(clk_dev, (clock_control_subsys_t) &config->clock_subsys);
-			if (ret != 0) {
-				LOG_ERR("Turn off %s clock fail.", dev->name);
-				return ret;
-			}
-#ifdef CONFIG_I3C_NPCX_DMA
-			ret = clock_control_off(clk_dev, (clock_control_subsys_t) &config->mdma_clk_subsys);
-			if (ret != 0) {
-				LOG_ERR("Turn off %s clock fail.", dev->name);
-				return ret;
-			}
-#endif
+			ret = npcx_i3c_activate(dev, false);
 		}
 	break;
 	default:
