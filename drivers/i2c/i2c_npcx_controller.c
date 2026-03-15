@@ -71,12 +71,14 @@
 #include <assert.h>
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/i2c.h>
+#include <zephyr/drivers/i2c/i2c_npcx.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/atomic.h>
 #include <soc.h>
 #include "soc_miwu.h"
 #include <zephyr/logging/log.h>
 #include <zephyr/irq.h>
+
 LOG_MODULE_REGISTER(i2c_npcx, LOG_LEVEL_ERR);
 
 /* I2C controller mode */
@@ -1418,6 +1420,63 @@ out:
 	return ret;
 }
 
+int npcx_i2c_activate(const struct device *dev, bool enable)
+{
+	const struct i2c_ctrl_config *const config = dev->config;
+	struct i2c_ctrl_data *const data = dev->data;
+	const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
+	struct smb_reg *const inst = HAL_I2C_INSTANCE(dev);
+	int ret = 0;
+
+	if (enable) {
+		ret = clock_control_on(clk_dev,	(clock_control_subsys_t) &config->clk_cfg);
+		if (ret != 0) {
+			LOG_ERR("Turn on %s clock fail.", dev->name);
+			return ret;
+		}
+
+		/* Reconfigure SMBCTL1 */
+		i2c_ctrl_bank_sel(dev, NPCX_I2C_BANK_NORMAL);
+
+		/* Enable module - before configuring CTL1 */
+		inst->SMBCTL2  |= BIT(NPCX_SMBCTL2_ENABLE);
+
+		#ifdef CONFIG_I2C_TARGET
+		if (atomic_get(&data->flags) != (atomic_val_t) 0) {
+			inst->SMBT_OUT |= BIT(NPCX_SMBT_OUT_T_OUTIE) | BIT(NPCX_SMBT_OUT_T_OUTST);
+		}
+		#endif
+
+		/* Enable SMB interrupt and 'New Address Match' interrupt source */
+		inst->SMBCTL1 |= BIT(NPCX_SMBCTL1_NMINTE) | BIT(NPCX_SMBCTL1_INTEN);
+
+		i2c_ctrl_bank_sel(dev, NPCX_I2C_BANK_FIFO);
+		i2c_ctrl_irq_enable(dev, 1);
+	} else {
+		/* A transiaction is ongoing */
+		if (data->oper_state != NPCX_I2C_IDLE) {
+			LOG_ERR("Device %s state is not idle: %d", dev->name, data->oper_state);
+			return -ECANCELED;
+		}
+
+		if (IS_BIT_SET(inst->SMBCST, NPCX_SMBCST_BB)) {
+			LOG_ERR("Device %s bus is busy", dev->name);
+			return -ECANCELED;
+		}
+
+		i2c_ctrl_irq_enable(dev, 0);
+		inst->SMBCTL2  &= ~BIT(NPCX_SMBCTL2_ENABLE);
+
+		ret = clock_control_off(clk_dev, (clock_control_subsys_t) &config->clk_cfg);
+		if (ret != 0) {
+			LOG_ERR("Turn off %s clock fail.", dev->name);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
 #ifdef CONFIG_PM_DEVICE
 static void npcx_i2c_wui_callback(const struct device *dev, struct npcx_wui *wui)
 {
@@ -1479,7 +1538,7 @@ static int npcx_i2c_pm_action(const struct device *dev, enum pm_device_action ac
 {
 	const struct i2c_ctrl_config *const config = dev->config;
 	struct i2c_ctrl_data *const data = dev->data;
-	const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
+	//const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
 	struct smb_reg *const inst = HAL_I2C_INSTANCE(dev);
 	int ret = 0;
 
@@ -1491,15 +1550,15 @@ static int npcx_i2c_pm_action(const struct device *dev, enum pm_device_action ac
 			npcx_i2c_wakeup_enable(dev, false);
 		} else {
 			LOG_INF("I2C device resume and power on: %x", data->port);
-
-			ret = clock_control_on(clk_dev,	(clock_control_subsys_t) &config->clk_cfg);
-			if (ret != 0) {
-				LOG_ERR("Turn on %s clock fail.", dev->name);
-				return ret;
-			}
+			ret = npcx_i2c_activate(dev, true);
 		}
 	break;
 	case PM_DEVICE_ACTION_SUSPEND:
+		/* A transiaction is ongoing */
+		if (data->oper_state != NPCX_I2C_IDLE) {
+			return -ECANCELED;
+		}
+
 		if (IS_BIT_SET(inst->SMBCST, NPCX_SMBCST_BB)) {
 			return -ECANCELED;
 		}
@@ -1507,11 +1566,7 @@ static int npcx_i2c_pm_action(const struct device *dev, enum pm_device_action ac
 		if (config->wakeup_source) {
 			npcx_i2c_wakeup_enable(dev, true);
 		} else {
-			ret = clock_control_off(clk_dev, (clock_control_subsys_t) &config->clk_cfg);
-			if (ret != 0) {
-				LOG_ERR("Turn off %s clock fail.", dev->name);
-				return ret;
-			}
+			ret = npcx_i2c_activate(dev, false);
 		}
 	break;
 	default:
