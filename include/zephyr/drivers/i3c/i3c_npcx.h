@@ -82,6 +82,14 @@ uint16_t npcx_i3c_target_get_mdmatb_count(const struct device *dev);
  */
 int npcx_i3c_activate(const struct device *dev, bool enable);
 
+/**
+ * @brief Enable or disable the wakeup feature for the npcx i3c controller.
+ *
+ * @param dev Pointer to the device structure for i3c controller instance.
+ * @param enable True to enable the wakeup feature, false to disable.
+ */
+void npcx_i3c_wakeup_enable(const struct device *dev, bool enable);
+
 /* MIPI I3C MDB definition: see https://www.mipi.org/MIPI_I3C_mandatory_data_byte_values_public */
 #define IBI_MDB_ID(grp, id)		((((grp) << 5) & GENMASK(7, 5)) | ((id) & GENMASK(4, 0)))
 #define IBI_MDB_GET_GRP(m)		(((m) & GENMASK(7, 5)) >> 5)

@@ -155,10 +155,8 @@ struct i2c_ctrl_config {
 	uintptr_t base; /* i2c controller base address */
 	struct npcx_clk_cfg clk_cfg; /* clock configuration */
 	uint8_t irq; /* i2c controller irq */
-#ifdef CONFIG_PM_DEVICE
 	bool wakeup_source;
 	struct npcx_wui sbd_wui;
-#endif
 };
 
 /* Driver data */
@@ -175,9 +173,7 @@ struct i2c_ctrl_data {
 	uint8_t port; /* current port used the controller */
 	bool is_configured; /* is port configured? */
 	const struct npcx_i2c_timing_cfg *ptr_speed_confs;
-#ifdef CONFIG_PM_DEVICE
 	struct miwu_callback sbd_callback;
-#endif
 #ifdef CONFIG_I2C_TARGET
 	struct i2c_target_config *target_cfg[NPCX_I2C_FLAG_COUNT];
     uint8_t target_idx;
@@ -1477,7 +1473,6 @@ int npcx_i2c_activate(const struct device *dev, bool enable)
 	return 0;
 }
 
-#ifdef CONFIG_PM_DEVICE
 static void npcx_i2c_wui_callback(const struct device *dev, struct npcx_wui *wui)
 {
 	const struct i2c_ctrl_config *const config = dev->config;
@@ -1534,6 +1529,7 @@ void npcx_i2c_wakeup_enable(const struct device *dev, bool enable)
 	}
 }
 
+#ifdef CONFIG_PM_DEVICE
 static int npcx_i2c_pm_action(const struct device *dev, enum pm_device_action action)
 {
 	const struct i2c_ctrl_config *const config = dev->config;
@@ -1667,13 +1663,9 @@ static int i2c_ctrl_init(const struct device *dev)
 		return ret;                                                    \
 	}
 
-#ifdef CONFIG_PM_DEVICE
 #define NPCX_I2C_PM_WAKEUP(inst)                                               \
 	.wakeup_source = (uint8_t)DT_INST_PROP_OR(inst, wakeup_source, 0),     \
 	.sbd_wui = NPCX_DT_WUI_ITEM_BY_NAME(inst, sbd_wui),
-#else
-#define NPCX_I2C_PM_WAKEUP(inst)
-#endif
 
 #define NPCX_I2C_CTRL_INIT(inst)                                               \
 	NPCX_I2C_CTRL_INIT_FUNC_DECL(inst);                                    \
