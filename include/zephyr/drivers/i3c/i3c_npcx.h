@@ -73,6 +73,15 @@ uint16_t npcx_i3c_target_get_mdmatb_count(const struct device *dev);
 
 #endif
 
+/**
+ * @brief Activate or deactivate the npcx i3c controller.
+ *
+ * @param dev Pointer to the device structure for i3c controller instance.
+ * @param enable True to activate the controller, false to deactivate.
+ * @return int 0 if successful, negative error code if failed.
+ */
+int npcx_i3c_activate(const struct device *dev, bool enable);
+
 #ifdef __cplusplus
 }
 #endif
