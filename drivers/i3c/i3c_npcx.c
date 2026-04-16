@@ -2736,16 +2736,7 @@ int npcx_i3c_activate(const struct device *dev, bool enable)
 			SET_FIELD(inst->MCONFIG, NPCX_I3C_MCONFIG_CTRENA, MCONFIG_CTRENA_ON);
 		}
 	} else {
-		if (get_oper_state(dev) != NPCX_I3C_IDLE) {
-			LOG_ERR("Device %s state is not idle: %d", dev->name, data->oper_state);
-			return -ECANCELED;
-		}
 
-		/* the I3C bus is still busy now */
-		if (IS_BIT_SET(inst->STATUS, NPCX_I3C_STATUS_STNOTSTOP)) {
-			LOG_ERR("Device %s bus is busy", dev->name);
-			return -ECANCELED;
-		}
 
 		if(config->target_mode == true) {
 			/* disable the target DMA */
