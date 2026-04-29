@@ -805,6 +805,7 @@ static void i2c_ctrl_target_isr(const struct device *dev, uint8_t status)
 	const struct i2c_target_callbacks *target_cb = NULL;
 	uint8_t val = 0;
 	uint8_t addr_idx;
+	int ret = 0;
 
 	/* A 'Bus Error' has been identified */
 
@@ -897,9 +898,17 @@ static void i2c_ctrl_target_isr(const struct device *dev, uint8_t status)
 			data->oper_state = NPCX_I2C_WRITE_FIFO;
 			/* Write first requested byte after repeated start */
 			if (target_cb->read_requested) {
-				target_cb->read_requested(data->target_cfg[data->target_idx], &val);
+				ret = target_cb->read_requested(data->target_cfg[data->target_idx], &val);
+				if (ret == -EINPROGRESS)
+				{
+					data->oper_state = NPCX_I2C_WRITE_SUSPEND;
+					LOG_INF("I2C IRQ disabled");
+					i2c_ctrl_irq_enable(dev, 0);
+					return; //Release the clock strech in thread
+				}
 			}
 			inst->SMBSDA = val;
+			LOG_ERR("ISR served read_requested");
 		} else {
 			/* Start receiving data in i2c target mode */
 			data->oper_state = NPCX_I2C_READ_FIFO;
@@ -1150,6 +1159,19 @@ recover_exit:
 }
 
 #ifdef CONFIG_I2C_TARGET
+/* I2C fill rx data to release clock streech */
+void i2c_rx_fill_n_release_clock_strech(const struct device *i2c_ctrl_dev, uint8_t val)
+{
+	struct smb_reg *const inst = HAL_I2C_INSTANCE(i2c_ctrl_dev);
+	struct i2c_ctrl_data *const data = i2c_ctrl_dev->data;
+	if (data->oper_state == NPCX_I2C_WRITE_SUSPEND)
+	{
+		data->oper_state = NPCX_I2C_WRITE_FIFO;
+		inst->SMBSDA = val;
+		i2c_ctrl_irq_enable(i2c_ctrl_dev, 1);
+	}
+}
+
 int npcx_i2c_ctrl_target_register(const struct device *i2c_dev,
 				 struct i2c_target_config *target_cfg, uint8_t port)
 {

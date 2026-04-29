@@ -14,6 +14,14 @@ extern "C" {
 #endif
 
 /**
+ * @brief Function to fill rx data to release clock strech in i2c target mode.
+ * 
+ * @param i2c_ctrl_dev Pointer to the device structure for i2c controller instance.
+ * @param val The byte of data to be transferred to the i2c target device.
+ */
+void i2c_rx_fill_n_release_clock_strech(const struct device *i2c_ctrl_dev, uint8_t val);
+
+/**
  * @brief Check if the npcx i2c controller is activated.
  * 
  * @param dev Pointer to the device structure for i2c controller instance.
