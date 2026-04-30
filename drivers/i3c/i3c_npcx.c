@@ -2703,7 +2703,6 @@ static int npcx_i3c_target_config(const struct device *dev)
 int npcx_i3c_activate(const struct device *dev, bool enable)
 {
 	const struct npcx_i3c_config *const config = dev->config;
-	struct npcx_i3c_data *data = dev->data;
 	const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
 	struct i3c_reg *inst = config->base;
 	int ret = 0;
@@ -2736,8 +2735,6 @@ int npcx_i3c_activate(const struct device *dev, bool enable)
 			SET_FIELD(inst->MCONFIG, NPCX_I3C_MCONFIG_CTRENA, MCONFIG_CTRENA_ON);
 		}
 	} else {
-
-
 		if(config->target_mode == true) {
 			/* disable the target DMA */
 			SET_FIELD(inst->DMACTRL, NPCX_I3C_DMACTRL_DMATB, MDMA_DMATB_DISABLE);
@@ -2761,6 +2758,9 @@ int npcx_i3c_activate(const struct device *dev, bool enable)
 		npcx_i3c_fifo_flush(inst);
 		/* disable the master */
 		SET_FIELD(inst->MCONFIG, NPCX_I3C_MCONFIG_CTRENA, MCONFIG_CTRENA_OFF);
+
+		/* set the operational state to idle */
+		set_oper_state(dev, NPCX_I3C_IDLE);
 
 		ret = clock_control_off(clk_dev, (clock_control_subsys_t) &config->clock_subsys);
 		if (ret != 0) {
