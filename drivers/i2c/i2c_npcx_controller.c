@@ -908,7 +908,6 @@ static void i2c_ctrl_target_isr(const struct device *dev, uint8_t status)
 				}
 			}
 			inst->SMBSDA = val;
-			LOG_ERR("ISR served read_requested");
 		} else {
 			/* Start receiving data in i2c target mode */
 			data->oper_state = NPCX_I2C_READ_FIFO;
