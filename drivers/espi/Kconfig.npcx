@@ -12,6 +12,15 @@ config ESPI_NPCX
 	  This option enables the Intel Enhanced Serial Peripheral Interface
 	  (eSPI) for NPCX family of processors.
 
+config ESPI_NPCX_HOST_SUB
+	bool "Nuvoton NPCX embedded controller (EC) host sub modules driver"
+	default y
+	depends on ESPI_NPCX
+	depends on DT_HAS_NUVOTON_NPCX_HOST_SUB_ENABLED
+	help
+	  This option enables NPCX Host Sub-Modules that serve as an interface
+	  between the Host and Core domains.
+
 config ESPI_NPCX_PERIPHERAL_ACPI_SHD_MEM_SIZE
 	int "Host I/O peripheral port size for shared memory in npcx series"
 	depends on ESPI_NPCX || ESPI_PERIPHERAL_ACPI_SHM_REGION

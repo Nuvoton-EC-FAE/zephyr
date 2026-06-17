@@ -27,6 +27,20 @@ void npcx_espi_enable_interrupts(const struct device *dev);
  */
 void npcx_espi_disable_interrupts(const struct device *dev);
 
+#if defined(CONFIG_SOC_SERIES_NPCX4)
+/**
+ * @brief Send a software interrupt via Virtual Wire.
+ *
+ * @param dev Pointer to structure device of eSPI module
+ * @param swirq_num Software interrupt number to send
+ * @param edge 
+ * @param level 
+ *
+ * @return int 
+ */
+int npcx_espi_vw_send_swirq(const struct device *dev, uint8_t swirq_num, bool edge, uint8_t level);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

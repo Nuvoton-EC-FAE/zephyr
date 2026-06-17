@@ -649,7 +649,13 @@ struct espi_reg {
 	volatile uint16_t reserved3[7];
 	/* 0x100 - 127: Virtual Wire Event Slave-to-Master 0 - 9 */
 	volatile uint32_t VWEVSM[10];
+#if defined(CONFIG_SOC_SERIES_NPCX4)
+	volatile uint32_t reserved4[5];
+	/* 0x13C: Virtual Wire Software IRQ Register */
+	volatile uint32_t VWSWIRQ;
+#else
 	volatile uint32_t reserved4[6];
+#endif	
 	/* 0x140 - 16F: Virtual Wire Event Master-to-Slave 0 - 11 */
 	volatile uint32_t VWEVMS[12];
 	volatile uint32_t reserved5[4];
@@ -943,7 +949,42 @@ struct shm_reg {
 	volatile uint16_t COFS2;
 	/* 0x04C: Core_Offset in Window 1 Address */
 	volatile uint16_t COFS1;
-	volatile uint16_t reserved12;
+	volatile uint8_t reserved12[50];
+	/* 0x080: Extended Shared Memory Host Status */
+	volatile uint8_t SMCE_STS;
+	/* 0x081: Extended Shared Memory Host Control */
+	volatile uint8_t SMCE_CTL;
+	volatile uint8_t reserved13[5];
+	/* 0x087: Extended Shared Access Windows Size */
+	volatile uint8_t WINE_SIZE;
+	/* 0x088: Extended Shared Access Window 3, Semaphore */
+	volatile uint8_t SHAW3_SEM;
+	/* 0x089: Extended Shared Access Window 4, Semaphore */
+	volatile uint8_t SHAW4_SEM;
+	volatile uint8_t reserved14[6];
+	/* 0x090: Extended Shared Access Window 3 Write Protect */
+	volatile uint8_t WIN3_WR_PROT;
+	/* 0x091: Extended Shared Access Window 3 Read Protect */
+	volatile uint8_t WIN3_RD_PROT;
+	/* 0x092: Extended Shared Access Window 4 Write Protect */
+	volatile uint8_t WIN4_WR_PROT;
+	/* 0x093: Extended Shared Access Window 4 Read Protect */
+	volatile uint8_t WIN4_RD_PROT;
+	volatile uint8_t reserved15[12];
+	/* 0x0A0: Extended Shared Access Window 3 Base */
+	volatile uint32_t WIN_BASE3;
+	/* 0x0A4: Extended Shared Access Window 4 Base */
+	volatile uint32_t WIN_BASE4;
+	volatile uint32_t reserved16[8];
+	/* 0x0C8: Host_Offset in Windows 3, 4 Status */
+	volatile uint8_t HOFSE_STS;
+	/* 0x0C9: Host_Offset in Windows 3, 4 Control */
+	volatile uint8_t HOFSE_CTL;
+	/* 0x0CA: Core_Offset in Window 4 Address */
+	volatile uint16_t COFS4;
+	/* 0x0CC: Core_Offset in Window 3 Address */
+	volatile uint16_t COFS3;
+	volatile uint16_t reserved17;
 };
 
 /* SHM register fields */

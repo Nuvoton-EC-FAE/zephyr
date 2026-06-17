@@ -46,6 +46,9 @@ struct espi_npcx_data {
 #if defined(CONFIG_ESPI_FLASH_CHANNEL)
 	struct k_sem flash_rx_lock;
 #endif
+
+	struct k_mutex vwswirq_lock;
+
 #ifdef CONFIG_ESPI_NPCX_CAF_GLOBAL_RESET_WORKAROUND
 	/* tell the interrupt handler that it is a fake request */
 	bool fake_req_flag;
@@ -1281,6 +1284,69 @@ void npcx_espi_disable_interrupts(const struct device *dev)
 	npcx_miwu_irq_disable(&config->espi_rst_wui);
 }
 
+#if defined(CONFIG_SOC_SERIES_NPCX4)
+int npcx_espi_vw_send_swirq(const struct device *dev, uint8_t swirq_num, bool edge, uint8_t level)
+{
+	struct espi_npcx_data *const data = dev->data;
+	struct espi_reg *const inst = HAL_INSTANCE(dev);
+	int ret = 0;
+
+	if ((swirq_num & 0x7F)== 0) {
+		LOG_ERR("SWIRQ number can't be 0");
+		return -EINVAL;
+	}
+
+	if (IS_BIT_SET(inst->VWSWIRQ, NPCX_VWSWIRQ_DIRTY)) {
+		LOG_ERR("Previous SWIRQ is still pending");
+		return -EBUSY;
+	}
+
+	/* lock the SWIRQ register until send SWIRQ done */
+	ret = k_mutex_lock(&data->vwswirq_lock, K_MSEC(100));
+	if (ret) {
+		LOG_ERR("Failed to acquire SWIRQ lock");
+		return -ETIMEDOUT;
+	}
+
+	uint32_t vwswirq = inst->VWSWIRQ;
+	vwswirq &= BIT(NPCX_VWSWIRQ_ENPLTRST) | BIT(NPCX_VWSWIRQ_ENCDRST);
+	SET_FIELD(vwswirq, NPCX_VWSWIRQ_IRQ_NUM, (swirq_num & 0x7F));
+
+	if (edge == true)
+	{
+		vwswirq |= BIT(NPCX_VWSWIRQ_IRQ_LVL) | BIT(NPCX_VWSWIRQ_EDGE_IRQ) | BIT(NPCX_VWSWIRQ_INDEX_EN);
+	}
+	else {
+		vwswirq |= BIT(NPCX_VWSWIRQ_INDEX_EN);
+
+		if (level) {
+			vwswirq |= BIT(NPCX_VWSWIRQ_IRQ_LVL);
+		}
+		else {
+			vwswirq &= ~BIT(NPCX_VWSWIRQ_IRQ_LVL);
+		}
+	}
+
+	if (swirq_num < 0x80) {
+		/* enable the index and set as 0 while IRQ number less than 0x80 */
+		SET_FIELD(vwswirq, NPCX_VWSWIRQ_INDEX, 0);
+	}
+	else {
+		/* enable the index and set as 1 while IRQ number greater than 0x80 */
+		SET_FIELD(vwswirq, NPCX_VWSWIRQ_INDEX, 1);
+	}
+
+	/* Set corresponding bit in SWIRQ register to send SWIRQ */
+	inst->VWSWIRQ = vwswirq;
+	LOG_ERR("Set VWSWIRQ: 0x%08X", vwswirq);
+
+	/* unlock the SWIRQ register */
+	k_mutex_unlock(&data->vwswirq_lock);
+
+	return 0;
+}
+#endif
+
 /* eSPI driver registration */
 static int espi_npcx_init(const struct device *dev);
 
@@ -1369,6 +1435,8 @@ static int espi_npcx_init(const struct device *dev)
 	k_sem_init(&data->flash_rx_lock, 0, 1);
 #endif
 
+	k_mutex_init(&data->vwswirq_lock);
+	
 	/* Configure Virtual Wire input signals */
 	for (i = 0; i < ARRAY_SIZE(vw_in_tbl); i++)
 		espi_vw_config_input(dev, &vw_in_tbl[i]);
