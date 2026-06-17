@@ -82,6 +82,49 @@ uint16_t npcx_i3c_target_get_mdmatb_count(const struct device *dev);
  */
 int npcx_i3c_activate(const struct device *dev, bool enable);
 
+int npcx_i3c_target_set_status_field(const struct device *dev, uint8_t pendint, uint8_t actstate, uint8_t vendinfo);
+int npcx_i3c_target_get_status_field(const struct device *dev, uint8_t *pendint, uint8_t *actstate, uint8_t *vendinfo);
+
+/* MIPI I3C MDB definition: see https://www.mipi.org/MIPI_I3C_mandatory_data_byte_values_public */
+#define IBI_MDB_ID(grp, id)		((((grp) << 5) & GENMASK(7, 5)) | ((id) & GENMASK(4, 0)))
+#define IBI_MDB_GET_GRP(m)		(((m) & GENMASK(7, 5)) >> 5)
+#define IBI_MDB_GET_ID(m)		((m) & GENMASK(4, 0))
+
+#define IBI_MDB_GRP_PENDING_READ_NOTIF	0x5
+#define IS_MDB_PENDING_READ_NOTIFY(m)	(IBI_MDB_GET_GRP(m) == IBI_MDB_GRP_PENDING_READ_NOTIF)
+#define IBI_MDB_MIPI_DBGDATAREADY	IBI_MDB_ID(IBI_MDB_GRP_PENDING_READ_NOTIF, 0xd)
+#define IBI_MDB_MCTP			IBI_MDB_ID(IBI_MDB_GRP_PENDING_READ_NOTIF, 0xe)
+/* Interrupt ID 0x10 to 0x1F are for vendor specific */
+#define IBI_MDB_ASPEED			I
+
+/* slave events */
+#define I3C_SLAVE_EVENT_SIR		BIT(0)
+#define I3C_SLAVE_EVENT_MR		BIT(1)
+#define I3C_SLAVE_EVENT_HJ		BIT(2)
+
+struct i3c_dev_attached_list *npcx_i3c_get_device_attached_list(const struct device *dev);
+int npcx_i3c_slave_set_static_addr(const struct device *dev, uint8_t static_addr);
+int npcx_i3c_slave_get_dynamic_addr(const struct device *dev, uint8_t *dynamic_addr);
+int npcx_i3c_slave_get_event_enabling(const struct device *dev, uint32_t *event_en);
+
+#define i3c_get_device_attached_list	npcx_i3c_get_device_attached_list
+
+//#define i3c_master_attach_device	i3c_npcm4xx_master_attach_device
+//#define i3c_master_detach_device	i3c_npcm4xx_master_detach_device
+//#define i3c_master_send_ccc		i3c_npcm4xx_master_send_ccc
+//#define i3c_master_priv_xfer		i3c_npcm4xx_master_priv_xfer
+//#define i3c_master_request_ibi		i3c_npcm4xx_master_request_ibi
+//#define i3c_master_enable_ibi		i3c_npcm4xx_master_enable_ibi
+//#define i3c_master_send_entdaa		i3c_npcm4xx_master_send_entdaa
+//#define i3c_slave_register		i3c_npcm4xx_slave_register
+#define i3c_slave_set_static_addr	npcx_i3c_slave_set_static_addr
+//#define i3c_slave_send_sir		i3c_npcm4xx_slave_send_sir
+//#define i3c_slave_hj_req		i3c_npcm4xx_slave_hj_req
+//#define i3c_slave_put_read_data		i3c_npcm4xx_slave_put_read_data
+#define i3c_slave_get_dynamic_addr	npcx_i3c_slave_get_dynamic_addr
+#define i3c_slave_get_event_enabling	npcx_i3c_slave_get_event_enabling
+//#define i3c_set_pid_extra_info		i3c_npcm4xx_set_pid_extra_info
+
 #ifdef __cplusplus
 }
 #endif
