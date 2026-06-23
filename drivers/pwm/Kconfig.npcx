@@ -11,3 +11,12 @@ config PWM_NPCX
 	  This option enables the PWM driver for NPCX family of
 	  processors.
 	  Say y if you wish to use pwm ports on NPCX MCU.
+
+config PWM_NPCX_HEARTBEAT
+	bool "Nuvoton NPCX PWM heartbeat helper/driver"
+	depends on PWM_NPCX
+	help
+	  Enable NPCX heartbeat support.
+	  This provides both:
+	  - A helper API to configure heartbeat waveform registers.
+	  - A devicetree-instantiated heartbeat profile device driver.

@@ -1,0 +1,21 @@
+sample:
+  description: NPCX PWM heartbeat helper driver sample
+  name: npcx pwm heartbeat
+tests:
+  sample.drivers.pwm.npcx_heartbeat:
+    tags:
+      - drivers
+      - pwm
+      - npcx
+    depends_on: pwm
+    filter: dt_compat_enabled("nuvoton,npcx-pwm-heartbeat")
+    integration_platforms:
+      - npcx4m8f_evb
+    harness: console
+    harness_config:
+      type: multi_line
+      ordered: true
+      regex:
+        - "NPCX PWM heartbeat sample start"
+        - "STANDARD heartbeat profile applied, frequency: [0-9]+ Hz"
+        - "VISUAL heartbeat profile applied, frequency: [0-9]+ Hz"
