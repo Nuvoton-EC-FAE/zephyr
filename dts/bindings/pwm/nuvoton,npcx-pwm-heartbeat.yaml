@@ -1,0 +1,14 @@
+# Copyright (c) 2026 Nuvoton Technology Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+description: Nuvoton NPCX PWM heartbeat profile device
+
+compatible: "nuvoton,npcx-pwm-heartbeat"
+
+include: base.yaml
+
+properties:
+  pwms:
+    type: phandle-array
+    required: true
+    description: PWM controller used to generate heartbeat waveform.
