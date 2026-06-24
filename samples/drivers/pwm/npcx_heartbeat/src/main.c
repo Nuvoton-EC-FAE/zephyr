@@ -32,7 +32,7 @@ static const struct pwm_npcx_hb_profile hb_profile_visual = {
 	.off_time = 700u,
 	.hb_mode = NPCX_PWM_HB_MODE_STANDARD,
 	.max_duty_per = 80u,
-	.min_duty_per = 15u,
+	.min_duty_per = 5u,
 };
 
 int main(void)
@@ -47,23 +47,22 @@ int main(void)
 
 	printk("NPCX PWM heartbeat sample start\n");
 
-	hz = pwm_npcx_hb_configure(hb_dev, &hb_profile_standard);
-	if (hz == 0u) {
-		printk("Failed to apply STANDARD heartbeat profile\n");
-		return 0;
-	}
-	printk("STANDARD heartbeat profile applied, frequency: %u Hz\n", hz);
-
-	k_sleep(K_SECONDS(12));
-
-	hz = pwm_npcx_hb_configure(hb_dev, &hb_profile_visual);
-	if (hz == 0u) {
-		printk("Failed to apply VISUAL heartbeat profile\n");
-		return 0;
-	}
-	printk("VISUAL heartbeat profile applied, frequency: %u Hz\n", hz);
-
 	while (1) {
+		hz = pwm_npcx_hb_configure(hb_dev, &hb_profile_standard);
+		if (hz == 0u) {
+			printk("Failed to apply heartbeat profile\n");
+			return 0;
+		}
+	
+		k_sleep(K_SECONDS(11));
+	
+		hz = pwm_npcx_hb_configure(hb_dev, &hb_profile_visual);
+		if (hz == 0u) {
+			printk("Failed to apply heartbeat profile\n");
+			return 0;
+		}
+	
+//	while (1) {
 		k_sleep(K_SECONDS(9));
 	}
 
