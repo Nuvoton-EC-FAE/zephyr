@@ -386,9 +386,10 @@
 				     <56 3>, /* KBC Output-Buf-Empty (OBE) */
 				     <26 3>, /* PMCH Input-Buf-Full (IBF) */
 				     <3 3>,  /* PMCH Output-Buf-Empty (OBE) */
-				     <6 3>;  /* Port80 FIFO Not Empty */
+				     <6 3>,  /* Port80 FIFO Not Empty */
+					 <24 3>; /* SHM interrupts */
 			interrupt-names = "kbc_ibf", "kbc_obe", "pmch_ibf",
-					  "pmch_obe", "p80_fifo";
+					  "pmch_obe", "p80_fifo", "shm";
 
 			/* WUI map for accessing host sub-modules */
 			host-acc-wui = <&wui_host_acc>;

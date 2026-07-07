@@ -13,6 +13,36 @@
 extern "C" {
 #endif
 
+enum espi_host_subs_peripheral {
+	ESPI_PERIPHERAL_SHARED_MEMORY = 0x80,
+	ESPI_PERIPHERAL_MAILBOX,
+};
+
+#define SHM_EVENT_CHANNEL_MASK 0xFF000000u
+#define SHM_EVENT_CHANNEL_POS  24u
+#define SHM_EVENT_CHANNEL(x)   ((x & SHM_EVENT_CHANNEL_MASK) >> SHM_EVENT_CHANNEL_POS)
+#define SHM_EVENT_TYPE_MASK 0x00FF0000u
+#define SHM_EVENT_TYPE_POS  16u
+#define SHM_EVENT_TYPE(x)   ((x & SHM_EVENT_TYPE_MASK) >> SHM_EVENT_TYPE_POS)
+
+
+/* SHM window number */
+typedef enum {
+	SHM_WINDOW_ONE      = 0,
+	SHM_WINDOW_TWO      = 1,
+    SHM_WINDOW_THREE    = 2,
+    SHM_WINDOW_FOUR     = 3,
+	SHM_WINDOW_NUM_MAX
+} shm_window_t;
+
+/* SHM Event Type */
+typedef enum {
+	SHM_HOST_ACCESS = 0,
+	SHM_HOST_SEMAPHORE_WRITTEN,
+	SHM_HOST_WRITE_TO_OFFSET,
+	SHM_HOST_READ_FROM_OFFSET,
+} shm_event_type_t;
+
 /**
  * @brief Turn on all interrupts of eSPI host interface module.
  *

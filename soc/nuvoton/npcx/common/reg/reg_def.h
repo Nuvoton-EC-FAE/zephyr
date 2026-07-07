@@ -993,6 +993,7 @@ struct shm_reg {
 #define NPCX_SMC_STS_HSEM1W              4
 #define NPCX_SMC_STS_HSEM2W              5
 #define NPCX_SMC_STS_SHM_ACC             6
+#define NPCX_SMC_CTL_HERES            	 FIELD(0, 2)
 #define NPCX_SMC_CTL_HERR_IE             2
 #define NPCX_SMC_CTL_HSEM1_IE            3
 #define NPCX_SMC_CTL_HSEM2_IE            4
@@ -1026,6 +1027,26 @@ struct shm_reg {
 #define NPCX_DP80CTL_CIEN                5
 #define NPCX_DP80CTL_DP80_HF_CFG         7
 #define NPCX_DP80BUF_OFFS_FIELD          FIELD(8, 3)
+#define NPCX_HOFS_STS_HOFS1R       		 0
+#define NPCX_HOFS_STS_HOFS1W       		 1
+#define NPCX_HOFS_STS_HOFS2R       		 2
+#define NPCX_HOFS_STS_HOFS2W       		 3
+#define NPCX_HOFS_CTL_HOFS1R_IE     	 0
+#define NPCX_HOFS_CTL_HOFS1W_IE     	 1
+#define NPCX_HOFS_CTL_HOFS2R_IE     	 2
+#define NPCX_HOFS_CTL_HOFS2W_IE     	 3
+#define NPCX_SMCE_STS_HSEM3W             4
+#define NPCX_SMCE_STS_HSEM4W             5
+#define NPCX_HOFSE_STS_HOFS3R       	 0
+#define NPCX_HOFSE_STS_HOFS3W       	 1
+#define NPCX_HOFSE_STS_HOFS4R       	 2
+#define NPCX_HOFSE_STS_HOFS4W       	 3
+#define NPCX_HOFSE_CTL_HOFS3R_IE     	 0
+#define NPCX_HOFSE_CTL_HOFS3W_IE     	 1
+#define NPCX_HOFSE_CTL_HOFS4R_IE     	 2
+#define NPCX_HOFSE_CTL_HOFS4W_IE     	 3
+#define NPCX_SHM_CTL_STALL_HOST			 6
+
 
 /*
  * Keyboard and Mouse Controller (KBC) device registers
