@@ -177,16 +177,16 @@ uint16_t pwm_npcx_config_heartbeat(
 			hz = (uint16_t)(clock / ctr);
 			hz = MAX(hz, 1u);
 			time = ((uint32_t)steps * 4u * 1000u) / hz;
-		} while (time < max_rise_fall_time);
+		} while ((time < max_rise_fall_time) && (steps <= 0xFF));
 
-		if (ctr > NPCX_PWM_MAX_CTR) {
+		if ((ctr > NPCX_PWM_MAX_CTR) || (steps > 0xFF)) {
 			prescaler++;
 			if (prescaler == 0u) {
 				return 0u;
 			}
 			clock = NPCX_PWM_HB_FRCLK_HZ / prescaler;
 		}
-	} while (ctr > NPCX_PWM_MAX_CTR);
+	} while ((ctr > NPCX_PWM_MAX_CTR) || (steps > 0xFF));
 
 	inst->PRSC = (uint16_t)(prescaler - 1u);
 
