@@ -386,6 +386,42 @@
 				 <&pcc NPCX_CLOCK_BUS_APB3 NPCX_PWDWN_CTL5 7>;
 		};
 
+			shm: shm@40010000 {
+				compatible = "nuvoton,npcx-shm";
+				reg = <0x40010000 0x2000
+				       0x4000e000 0x2000>;
+				reg-names = "shm", "c2h";
+				clocks = <&pcc NPCX_CLOCK_BUS_APB3 NPCX_PWDWN_CTL5 3>,
+					 <&pcc NPCX_CLOCK_BUS_APB3 NPCX_PWDWN_CTL5 4>,
+					 <&pcc NPCX_CLOCK_BUS_APB3 NPCX_PWDWN_CTL5 5>;
+				interrupts = <24 4>;
+				status = "okay";
+
+				shm_win1: window1 {
+					compatible = "nuvoton,npcx-shm-window";
+					id = <1>;
+					status = "disabled";
+				};
+
+				shm_win2: window2 {
+					compatible = "nuvoton,npcx-shm-window";
+					id = <2>;
+					status = "disabled";
+				};
+
+				shm_win3: window3 {
+					compatible = "nuvoton,npcx-shm-window";
+					id = <3>;
+					status = "disabled";
+				};
+
+				shm_win4: window4 {
+					compatible = "nuvoton,npcx-shm-window";
+					id = <4>;
+					status = "disabled";
+				};
+			};
+
 		tach1: tach@400e1000 {
 			compatible = "nuvoton,npcx-tach";
 			reg = <0x400e1000 0x2000>;

@@ -1,0 +1,27 @@
+/*
+ * Copyright (c) 2026 Nuvoton Technology Corporation
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&shm_win1 {
+	status = "okay";
+};
+
+&shm_win2 {
+	status = "okay";
+};
+
+&shm_win3 {
+	status = "okay";
+};
+
+&shm_win4 {
+	status = "okay";
+};
+
+&espi0 {
+	status = "okay";
+	pinctrl-0 = <&espi_lpc_gp46_47_51_52_53_54_55_57>;
+	pinctrl-names = "default";
+};

@@ -1,0 +1,9 @@
+# Copyright (c) 2026 Nuvoton Technology Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+config NPCX_SHM
+	bool "Nuvoton NPCX shared memory driver"
+	default y if DT_HAS_NUVOTON_NPCX_SHM_WINDOW_ENABLED
+	depends on SOC_FAMILY_NPCX
+	help
+	  Enable the Nuvoton NPCX shared memory (SHM) driver.
