@@ -1,0 +1,19 @@
+# Copyright (c) 2026 Nuvoton Technology Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+description: Nuvoton NPCX shared memory window instance
+
+compatible: "nuvoton,npcx-shm-window"
+
+include: base.yaml
+
+properties:
+  id:
+    type: int
+    required: true
+    enum:
+      - 1
+      - 2
+      - 3
+      - 4
+    description: Shared memory window index.

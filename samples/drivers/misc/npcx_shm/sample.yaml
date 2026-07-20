@@ -1,0 +1,19 @@
+sample:
+  description: NPCX Shared Memory API sample
+  name: NPCX SHM sample
+
+common:
+  tags:
+    - drivers
+    - misc
+    - npcx
+
+tests:
+  sample.drivers.misc.npcx_shm:
+    platform_allow:
+      - npcx4m8f_evb
+    harness: console
+    harness_config:
+      type: one_line
+      regex:
+        - "NPCX SHM sample start"

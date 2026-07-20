@@ -901,10 +901,45 @@ struct shm_reg {
 	volatile uint16_t COFS2;
 	/* 0x04C: Core_Offset in Window 1 Address */
 	volatile uint16_t COFS1;
-	volatile uint16_t reserved12;
+	volatile uint8_t reserved12[0x32];
+	/* 0x080: Extended Shared Memory Core Status */
+	volatile uint8_t SMCE_STS;
+	/* 0x081: Extended Shared Memory Core Control */
+	volatile uint8_t SMCE_CTL;
+	volatile uint8_t reserved13[0x05];
+	/* 0x087: Extended Shared Access Windows Size */
+	volatile uint8_t WINE_SIZE;
+	/* 0x088: Shared Access Window 3 Semaphore */
+	volatile uint8_t SHAW3_SEM;
+	/* 0x089: Shared Access Window 4 Semaphore */
+	volatile uint8_t SHAW4_SEM;
+	volatile uint8_t reserved14[0x06];
+	/* 0x090: Shared Access Window 3 Write Protect */
+	volatile uint8_t WIN3_WR_PROT;
+	/* 0x091: Shared Access Window 3 Read Protect */
+	volatile uint8_t WIN3_RD_PROT;
+	/* 0x092: Shared Access Window 4 Write Protect */
+	volatile uint8_t WIN4_WR_PROT;
+	/* 0x093: Shared Access Window 4 Read Protect */
+	volatile uint8_t WIN4_RD_PROT;
+	volatile uint8_t reserved15[0x0c];
+	/* 0x0A0: Shared Access Window 3 Base */
+	volatile uint32_t WIN_BASE3;
+	/* 0x0A4: Shared Access Window 4 Base */
+	volatile uint32_t WIN_BASE4;
+	volatile uint8_t reserved16[0x20];
+	/* 0x0C8: Host_Offset in Windows 3, 4 Status */
+	volatile uint8_t HOFSE_STS;
+	/* 0x0C9: Host_Offset in Windows 3, 4 Control */
+	volatile uint8_t HOFSE_CTL;
+	/* 0x0CA: Core_Offset in Window 4 Address */
+	volatile uint16_t COFS4;
+	/* 0x0CC: Core_Offset in Window 3 Address */
+	volatile uint16_t COFS3;
 };
 
 /* SHM register fields */
+#define NPCX_SMC_CTL_HERES_FIELD       FIELD(0, 2)
 #define NPCX_SMC_STS_HRERR             0
 #define NPCX_SMC_STS_HWERR             1
 #define NPCX_SMC_STS_HSEM1W            4
@@ -920,6 +955,8 @@ struct shm_reg {
 #define NPCX_FLASH_SIZE_RD_BURST       7
 #define NPCX_WIN_SIZE_RWIN1_SIZE_FIELD FIELD(0, 4)
 #define NPCX_WIN_SIZE_RWIN2_SIZE_FIELD FIELD(4, 4)
+#define NPCX_WIN_SIZE_RWIN3_SIZE_FIELD FIELD(0, 4)
+#define NPCX_WIN_SIZE_RWIN4_SIZE_FIELD FIELD(4, 4)
 #define NPCX_WIN_PROT_RW1L_RP          0
 #define NPCX_WIN_PROT_RW1L_WP          1
 #define NPCX_WIN_PROT_RW1H_RP          2

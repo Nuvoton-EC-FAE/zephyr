@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Nuvoton Technology Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+description: Nuvoton NPCX shared memory controller
+
+compatible: "nuvoton,npcx-shm"
+
+include: base.yaml
+
+properties:
+  clocks:
+    required: true
+    description: PCC clock configuration for SHM controller
+
+  reg:
+    required: true
+    description: SHM and C2H MMIO regions
+
+  reg-names:
+    required: true
+    description: Name of each register space
+
+  interrupts:
+    required: true
+    description: SHM interrupt line shared by all windows
