@@ -28,7 +28,7 @@ enum npcx_shm_window {
 };
 
 /**
- * @brief Core interrupt mask bits. 
+ * @brief Core interrupt mask bits.
  * Used in struct npcx_shm_window_config.core_interrupts_mask to enable/disable core interrupts.
  * Also used in the callback function.
  */
@@ -37,8 +37,8 @@ enum npcx_shm_window {
 #define NPCX_SHM_INT_ON_HOST_WR_SEMAPHORE   BIT(2)
 
 /**
- * @brief Host-offset IRQ/SMI mask bits. 
- * Used in struct npcx_shm_window_config.host_interrupts_mask 
+ * @brief Host-offset IRQ/SMI mask bits.
+ * Used in struct npcx_shm_window_config.host_interrupts_mask
  * to enable/disable host interrupts.
  */
 #define NPCX_SHM_IRQ_CORE_RD_FROM_HOST_OFFSET BIT(0)
@@ -80,63 +80,75 @@ struct npcx_shm_window_config {
 	npcx_shm_callback_t callback;
 	/** Window base address in RAM. Must be align to window_size.          */
 	uint32_t window_base;
-	/** Window size in bytes. Form 8 bytes to 4KB.                         *
-	 *  Allowed values must be a powers of 2 (8,16,32,...4KB)              */
+	/**
+	 * Window size in bytes. Form 8 bytes to 4KB.
+	 * Allowed values must be a powers of 2 (8, 16, 32, ... 4KB).
+	 */
 	uint16_t window_size;
-	/** bitMask representing the access Protection                         *
-	  * if a bit is set to 1 - the specific aread is protected.            *
-	  * if a bit is set to 0 - the specific aread is not protected         *
-	  * - Bit 0  = Write Protect the first (lower) 1/8 of the RAM window   *
-	  * - Bit 1  = Write Protect the second 1/8 of the RAM window          *
-	  * - Bit 2  = Write Protect the 3rd 1/8 of the RAM window             *
-	  * - Bit 3  = Write Protect the 4th 1/8 of the RAM window             *
-	  * - Bit 4  = Write Protect the 5th 1/8 of the RAM window             *
-	  * - Bit 5  = Write Protect the 6th 1/8 of the RAM window             *
-	  * - Bit 6  = Write Protect the 7th 1/8 of the RAM window             *
-	  * - Bit 7  = Write Protect the 8th 1/8 of the RAM window             *
-	  * - Bit 8  = Read Protect the first (lower) 1/8 of the RAM window    *
-	  * - Bit 9  = Read Protect the second 1/8 of the RAM window           *
-	  * - Bit 10 = Read Protect the 3rd 1/8 of the RAM window              *
-	  * - Bit 11 = Read Protect the 4th 1/8 of the RAM window              *
-	  * - Bit 12 = Read Protect the 5th 1/8 of the RAM window              *
-	  * - Bit 13 = Read Protect the 6th 1/8 of the RAM window              *
-	  * - Bit 14 = Read Protect the 7th 1/8 of the RAM window              *
-	  * - Bit 15 = Read Protect the 8th 1/8 of the RAM window              */
+	/**
+	 * bitMask representing the access protection.
+	 * If a bit is set to 1, the specific area is protected.
+	 * If a bit is set to 0, the specific area is not protected.
+	 * - Bit 0  = Write Protect the first (lower) 1/8 of the RAM window
+	 * - Bit 1  = Write Protect the second 1/8 of the RAM window
+	 * - Bit 2  = Write Protect the 3rd 1/8 of the RAM window
+	 * - Bit 3  = Write Protect the 4th 1/8 of the RAM window
+	 * - Bit 4  = Write Protect the 5th 1/8 of the RAM window
+	 * - Bit 5  = Write Protect the 6th 1/8 of the RAM window
+	 * - Bit 6  = Write Protect the 7th 1/8 of the RAM window
+	 * - Bit 7  = Write Protect the 8th 1/8 of the RAM window
+	 * - Bit 8  = Read Protect the first (lower) 1/8 of the RAM window
+	 * - Bit 9  = Read Protect the second 1/8 of the RAM window
+	 * - Bit 10 = Read Protect the 3rd 1/8 of the RAM window
+	 * - Bit 11 = Read Protect the 4th 1/8 of the RAM window
+	 * - Bit 12 = Read Protect the 5th 1/8 of the RAM window
+	 * - Bit 13 = Read Protect the 6th 1/8 of the RAM window
+	 * - Bit 14 = Read Protect the 7th 1/8 of the RAM window
+	 * - Bit 15 = Read Protect the 8th 1/8 of the RAM window
+	 */
 	uint16_t window_protection_mask;
-	/** Set the "Core offset" from the windows base.                        *
-      *  A core WRITE to this offset can generate an IRQ/SMI to the host    *
-      *  A host READ from this offset can generate an Interrupt to the core */
+	/**
+	 * Set the "Core offset" from the windows base.
+	 * A core WRITE to this offset can generate an IRQ/SMI to the host.
+	 * A host READ from this offset can generate an interrupt to the core.
+	 */
 	uint16_t core_offset;
-	/** Set Host offset from the window base.                               *
-	  * A host WRITE to this offset can generate an Interrupt to the core   *
-	  * A core READ from this offset can generate an IRQ/SMI to the host    */
+	/**
+	 * Set host offset from the window base.
+	 * A host WRITE to this offset can generate an interrupt to the core.
+	 * A core READ from this offset can generate an IRQ/SMI to the host.
+	 */
 	uint16_t host_offset;
-	/** bitMask representing if Core Offset interrutpt is enabled/disabled  *
-	  * If a bit is set to 1 - the specific interrutpt is enabled           *
-	  * If a bit is set to 0 - the specific interrutpt is disabled          *
-	  * bit 0 NPCX_SHM_OFFSET_INT_ON_HOST_RD_CORE_OFFSET                    *
-	  *       Interrupt on host read from core offset                       *
-	  * bit 1 NPCX_SHM_OFFSET_INT_ON_HOST_WR_HOST_OFFSET                    *
-	  *       Interrupt on host write to host offset                        *
-	  * bit 2 NPCX_SHM_INT_ON_HOST_WR_SEMAPHORE                             *
-	  *       Interrupt on host access to the semaphore register            */
+	/**
+	 * bitMask representing if Core Offset interrupt is enabled/disabled.
+	 * If a bit is set to 1, the specific interrupt is enabled.
+	 * If a bit is set to 0, the specific interrupt is disabled.
+	 * bit 0 NPCX_SHM_OFFSET_INT_ON_HOST_RD_CORE_OFFSET
+	 *       Interrupt on host read from core offset
+	 * bit 1 NPCX_SHM_OFFSET_INT_ON_HOST_WR_HOST_OFFSET
+	 *       Interrupt on host write to host offset
+	 * bit 2 NPCX_SHM_INT_ON_HOST_WR_SEMAPHORE
+	 *       Interrupt on host access to the semaphore register
+	 */
 	uint8_t core_interrupts_mask;
-	/** bitMask representing if HOST IRQ or SMI is enabled/disabled         *
-	  * If a bit is set to 1 - the specific interrutpt is enabled           *
-	  * If a bit is set to 0 - the specific interrutpt is disabled          *
-	  * bit 0 NPCX_SHM_IRQ_CORE_RD_FROM_HOST_OFFSET                         *
-	  *       Enable IRQ on core read from host offset.                     *
-	  * bit 1 NPCX_SHM_IRQ_CORE_WR_TO_CORE_OFFSET                           *
-	  *       Enable IRQ on core write to core offset.                      *
-	  * bit 2,3 not used                                                    *
-	  * bit 4 NPCX_SHM_SMI_CORE_RD_FROM_HOST_OFFSET                         *
-	  *       Enable SMI on core read from host offset.                     *
-	  * bit 5 NPCX_SHM_SMI_CORE_WR_TO_CORE_OFFSET                           *
-	  *       Enable SMI on core write to core offset.                      *
-	  * bit 6 NPCX_SHM_IRQ_CORE_WR_TO_SEMAPHOR                              *
-	  *       Enable host IRQ on core write to semaphore register.          *
-	  * bit 7 NPCX_SHM_SMI_CORE_WR_TO_SEMAPHOR                              *
-	  *       Enable host SMI on core write to semaphore register.          */
+	/**
+	 * bitMask representing if HOST IRQ or SMI is enabled/disabled.
+	 * If a bit is set to 1, the specific interrupt is enabled.
+	 * If a bit is set to 0, the specific interrupt is disabled.
+	 * bit 0 NPCX_SHM_IRQ_CORE_RD_FROM_HOST_OFFSET
+	 *       Enable IRQ on core read from host offset.
+	 * bit 1 NPCX_SHM_IRQ_CORE_WR_TO_CORE_OFFSET
+	 *       Enable IRQ on core write to core offset.
+	 * bit 2,3 not used
+	 * bit 4 NPCX_SHM_SMI_CORE_RD_FROM_HOST_OFFSET
+	 *       Enable SMI on core read from host offset.
+	 * bit 5 NPCX_SHM_SMI_CORE_WR_TO_CORE_OFFSET
+	 *       Enable SMI on core write to core offset.
+	 * bit 6 NPCX_SHM_IRQ_CORE_WR_TO_SEMAPHOR
+	 *       Enable host IRQ on core write to semaphore register.
+	 * bit 7 NPCX_SHM_SMI_CORE_WR_TO_SEMAPHOR
+	 *       Enable host SMI on core write to semaphore register.
+	 */
 	uint8_t host_interrupts_mask;
 };
 

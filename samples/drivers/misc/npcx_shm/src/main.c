@@ -29,7 +29,7 @@ static struct k_sem shm_event_sem;
 static void shm_win_gen_irq_callback(uint8_t sts, uint32_t win)
 {
 
-	if (sts & NPCX_SHM_INT_ON_HOST_RD_CORE_OFFSET){
+	if (sts & NPCX_SHM_INT_ON_HOST_RD_CORE_OFFSET) {
 		/* Set flag to indicate host has read from core_offset */
 		shm_core_offset_read[win] = true;
 	}
@@ -82,9 +82,9 @@ int main(void)
 	const struct device *dev_win1 = DEVICE_DT_GET(DT_NODELABEL(shm_win1));
 	const struct device *dev_win2 = DEVICE_DT_GET(DT_NODELABEL(shm_win2));
 
-	/* 
-	 * Initialize eSPI. 
-	 * If eSPI is not enable the eSPI module is powered down and the 
+	/*
+	 * Initialize eSPI.
+	 * If eSPI is not enable the eSPI module is powered down and the
 	 * comunication between host and the SHM memory will not work.
 	 */
 	espi_init();

@@ -73,7 +73,7 @@ static inline bool npcx_shm_valid_window_id(uint8_t window_id)
 	       (window_id <= NPCX_SHM_MAX_WINDOWS);
 }
 
-/* 
+/*
  * Set or clear a specific bit in an 8-bit register.
  *
  * Parameters:
@@ -90,7 +90,7 @@ static void npcx_shm_set_bit_u8(volatile uint8_t *reg, uint8_t bit, bool enable)
 	}
 }
 
-/* 
+/*
  * Convert a window size to the hardware encoding.
  *
  * Parameters:
@@ -99,7 +99,7 @@ static void npcx_shm_set_bit_u8(volatile uint8_t *reg, uint8_t bit, bool enable)
  * Returns:
  * - Hardware encoding of the window size.
  */
-static inline uint8_t npcx_shm_covert_wnd_size(uint32_t size)
+static inline uint8_t npcx_shm_convert_wnd_size(uint32_t size)
 {
 	/* Hardware encoding is log2(window_size) with the valid range clamped. */
 	if (size <= 8U) {
@@ -132,7 +132,7 @@ static void npcx_shm_wait_c2h_write_done(struct c2h_reg *c2h)
 	}
 }
 
-/* 
+/*
  * Wait for a C2H read transaction to complete.
  *
  * Parameters:
@@ -151,7 +151,7 @@ static void npcx_shm_wait_c2h_read_done(struct c2h_reg *c2h)
 	}
 }
 
-/* 
+/*
  * Read a value from a Host register for the selected LDN.
  *
  * Parameters:
@@ -199,7 +199,7 @@ static uint8_t npcx_c2h_read_reg(const struct npcx_shm_config *config,
 	return value;
 }
 
-/* 
+/*
  * Write a value to a Host register for the selected LDN.
  *
  * Parameters:
@@ -242,7 +242,7 @@ static void npcx_c2h_write_reg(const struct npcx_shm_config *config,
 	k_spin_unlock(&data->lock, key);
 }
 
-/* 
+/*
  * Return the offset for the HOFSx registers for the selected SHM window.
  *
  * Parameters:
@@ -277,7 +277,7 @@ static void npcx_shm_hofs_cfg_index(uint8_t window_id, uint8_t *idx_l,
 #define NPCX_SHM_SEM_1_2_IE (BIT(NPCX_SMC_CTL_HSEM1_IE) | BIT(NPCX_SMC_CTL_HSEM2_IE))
 #define NPCX_ESHM_SEM_3_4_IE (BIT(NPCX_SMCE_CTL_HSEM3_IE) | BIT(NPCX_SMCE_CTL_HSEM4_IE))
 
-/* 
+/*
  * SHM interrupt service routine.
  *
  * Parameters:
@@ -295,13 +295,13 @@ static void npcx_shm_isr(const struct device *dev)
 	uint8_t hofse_ctl = config->shm->HOFSE_CTL;
 	uint8_t hofse_sts = config->shm->HOFSE_STS;
 
-	/* clear status bits  */
+	/* clear status bits */
 	config->shm->SMC_STS   = smc_sts;
 	config->shm->SMCE_STS  = smce_sts;
 	config->shm->HOFS_STS  = hofs_sts;
 	config->shm->HOFSE_STS = hofse_sts;
 
-	/* clear none enable bits  */
+	/* clear none enable bits */
 	smc_sts   = smc_sts   & ((smc_ctl & NPCX_SHM_SEM_1_2_IE) << 1);
 	smce_sts  = smce_sts  & ((smce_ctl & NPCX_ESHM_SEM_3_4_IE) << 1);
 	hofs_sts  = hofs_sts  & hofs_ctl;
@@ -310,34 +310,38 @@ static void npcx_shm_isr(const struct device *dev)
 	if (npcx_shm_callback[0] != NULL) {
 		/* check WIN1 bits */
 		uint8_t sts = (hofs_sts & 0x3) | ((smc_sts & 0x10) >> 2);
-		if(sts) {
+
+		if (sts) {
 			npcx_shm_callback[0](sts);
 		}
 	}
 	if (npcx_shm_callback[1] != NULL) {
 		/* check WIN2 bits */
 		uint8_t sts = ((hofs_sts >> 2) & 0x3) | ((smc_sts & 0x20) >> 3);
-		if(sts) {
+
+		if (sts) {
 			npcx_shm_callback[1](sts);
 		}
 	}
 	if (npcx_shm_callback[2] != NULL) {
 		/* check WIN3 bits */
 		uint8_t sts = (hofse_sts & 0x3) | ((smce_sts & 0x10) >> 2);
-		if(sts) {
+
+		if (sts) {
 			npcx_shm_callback[2](sts);
 		}
 	}
 	if (npcx_shm_callback[3] != NULL) {
 		/* check WIN4 bits */
 		uint8_t sts = ((hofse_sts >> 2) & 0x3) | ((smce_sts & 0x20) >> 3);
-		if(sts) {
+
+		if (sts) {
 			npcx_shm_callback[3](sts);
 		}
 	}
 }
 
-/* 
+/*
  * Enable or disable semaphore interrupts for the selected SHM window.
  *
  * Parameters:
@@ -366,7 +370,7 @@ static void npcx_shm_enable_semaphore_interrupt(const struct device *dev,
 	}
 }
 
-/* 
+/*
  * Configure the host semaphore for the selected SHM window.
  *
  * Parameters:
@@ -438,7 +442,7 @@ static void npcx_shm_set_window(const struct device *dev,
 	const struct npcx_shm_config *config = dev->config;
 	const struct npcx_shm_data *data = dev->data;
 	struct shm_reg *shm = config->shm;
-	uint8_t size = npcx_shm_covert_wnd_size(window_size);
+	uint8_t size = npcx_shm_convert_wnd_size(window_size);
 
 	switch (data->window_id) {
 	case NPCX_SHM_WINDOW_1:
@@ -494,7 +498,7 @@ static void npcx_shm_window_protect(const struct device *dev,
 	}
 }
 
-/* 
+/*
  * Set the "Core offset" from the windows base.
  * A core WRITE to this offset can generate an IRQ/SMI to the host
  * A host READ from this offset can generate an Interrupt to the core
@@ -520,7 +524,7 @@ static void npcx_shm_set_core_offset(const struct device *dev,
 		break;
 	}
 }
-/* 
+/*
  * Enable core offset interrupts for the selected SHM window.
  */
 static void npcx_shm_enable_core_offset_interrupts(const struct device *dev,
@@ -552,7 +556,7 @@ static void npcx_shm_enable_core_offset_interrupts(const struct device *dev,
 	}
 }
 
-/* 
+/*
  * Uses the Core2Host (c2h) interface to access the Host registers in order to set the "Host offset"
  * A host WRITE to this offset can generate an Interrupt to the core
  * A core READ from this offset can generate an IRQ/SMI to the host
@@ -578,8 +582,8 @@ static void npcx_shm_set_host_offset(const struct device *dev,
 	npcx_c2h_write_reg(config, data, device_mask, idx_h, (uint8_t)(offset >> 8));
 }
 
-/* 
- * Enable host offset interrupts for the selected SHM window. 
+/*
+ * Enable host offset interrupts for the selected SHM window.
  */
 static void npcx_shm_enable_host_offset_interrupts(const struct device *dev,
 					 uint8_t mask)
@@ -674,6 +678,7 @@ static void npcx_shm_api_window_config(const struct device *dev,
 {
 	if (cfg->callback != NULL) {
 		const struct npcx_shm_data *data = dev->data;
+
 		npcx_shm_callback[data->window_id-1] = cfg->callback;
 	}
 
@@ -805,16 +810,25 @@ static DEVICE_API(npcx_shm, npcx_shm_api) = {
 DT_INST_FOREACH_STATUS_OKAY(NPCX_SHM_INIT)
 
 #if DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) > 0
-/* Register all enabled window devices exactly once at boot. */
-#define NPCX_SHM_WINDOW_INIT(inst) \
-	do { \
-		const struct device *window_dev = DEVICE_DT_GET(DT_DRV_INST(inst)); \
-		struct npcx_shm_data *window_data = window_dev->data; \
-		if (!npcx_shm_valid_window_id(window_data->window_id)) { \
-			return -EINVAL; \
-		} \
-		npcx_shm_callback[window_data->window_id-1] = NULL; \
-	} while (0);
+/* Build a static list of enabled SHM window devices for module initialization. */
+#define NPCX_SHM_WINDOW_DEV(inst) DEVICE_DT_GET(DT_DRV_INST(inst)),
+static const struct device *const npcx_shm_window_devs[] = {
+	DT_INST_FOREACH_STATUS_OKAY(NPCX_SHM_WINDOW_DEV)
+};
+#undef NPCX_SHM_WINDOW_DEV
+
+static int npcx_shm_window_init(const struct device *window_dev)
+{
+	struct npcx_shm_data *window_data = window_dev->data;
+
+	if (!npcx_shm_valid_window_id(window_data->window_id)) {
+		return -EINVAL;
+	}
+
+	npcx_shm_callback[window_data->window_id - 1U] = NULL;
+
+	return 0;
+}
 
 /* Initialize the SHM module */
 static int npcx_shm_module_init(void)
@@ -824,6 +838,7 @@ static int npcx_shm_module_init(void)
 	const struct device *clk_dev = DEVICE_DT_GET(DT_NODELABEL(pcc));
 	int ret;
 	int i;
+	int window_idx;
 
 	if (!device_is_ready(dev)) {
 		return -ENODEV;
@@ -841,7 +856,12 @@ static int npcx_shm_module_init(void)
 		}
 	}
 
-	DT_INST_FOREACH_STATUS_OKAY(NPCX_SHM_WINDOW_INIT)
+	for (window_idx = 0; window_idx < ARRAY_SIZE(npcx_shm_window_devs); window_idx++) {
+		ret = npcx_shm_window_init(npcx_shm_window_devs[window_idx]);
+		if (ret < 0) {
+			return ret;
+		}
+	}
 
 	/* clear all interrupts */
 	config->shm->SMC_STS = 0xFFU;
@@ -849,7 +869,7 @@ static int npcx_shm_module_init(void)
 	config->shm->HOFS_STS = 0xFFU;
 	config->shm->HOFSE_STS = 0xFFU;
 
-	/* install the Interrupt hadler */
+	/* Install the interrupt handler. */
 	IRQ_CONNECT(DT_IRQN(NPCX_SHM_PARENT(0)), DT_IRQ(NPCX_SHM_PARENT(0), priority),
 		    npcx_shm_isr, DEVICE_DT_GET(DT_DRV_INST(0)), 0);
 	irq_enable(DT_IRQN(NPCX_SHM_PARENT(0)));
