@@ -82,6 +82,14 @@ uint16_t npcx_i3c_target_get_mdmatb_count(const struct device *dev);
  */
 int npcx_i3c_activate(const struct device *dev, bool enable);
 
+/**
+ * @brief Enable or disable the wakeup feature for the npcx i3c controller.
+ *
+ * @param dev Pointer to the device structure for i3c controller instance.
+ * @param enable True to enable the wakeup feature, false to disable.
+ */
+void npcx_i3c_wakeup_enable(const struct device *dev, bool enable);
+
 int npcx_i3c_target_set_status_field(const struct device *dev, uint8_t pendint, uint8_t actstate, uint8_t vendinfo);
 int npcx_i3c_target_get_status_field(const struct device *dev, uint8_t *pendint, uint8_t *actstate, uint8_t *vendinfo);
 

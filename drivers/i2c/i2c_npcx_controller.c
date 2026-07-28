@@ -95,6 +95,16 @@ LOG_MODULE_REGISTER(i2c_npcx, LOG_LEVEL_ERR);
 #define I2C_TRANS_TIMEOUT K_MSEC(100)
 
 /*
+ * Maximum number of 1ms poll retries for the target-mode bus-stall recovery
+ * work (i2c_ctrl_target_timeout) to wait for SDA/SCL to be released high.
+ * Bounds the recovery so a permanently-low bus (e.g. host powered off mid
+ * transaction, leaving the bus pull-up rail unpowered) cannot spin the work
+ * forever, which otherwise keeps a 1ms kernel timeout armed and blocks the
+ * EC from entering deep sleep.
+ */
+#define I2C_TARGET_STALL_MAX_RETRIES 50
+
+/*
  * NPCX I2C module that supports FIFO mode has 32 bytes Tx FIFO and
  * 32 bytes Rx FIFO.
  */
@@ -182,6 +192,7 @@ struct i2c_ctrl_data {
 	struct i2c_target_config *target_cfg[NPCX_I2C_FLAG_COUNT];
     uint8_t target_idx;
 	struct k_work_delayable timeout_work;
+	uint16_t stall_retries; /* 1ms poll count for target bus-stall recovery */
 	uintptr_t base; /* i2c controller base address */
 	atomic_t flags;
 #endif
@@ -776,11 +787,26 @@ static void i2c_ctrl_target_timeout(struct k_work *work)
 	struct i2c_ctrl_data *const data = CONTAINER_OF(dwork, struct i2c_ctrl_data, timeout_work);
 	struct smb_reg *const inst = (struct smb_reg *) data->base;
 
-	if(!(inst->SMBCTL3 & BIT(NPCX_SMBCTL3_SDA_LVL)) || !(inst->SMBCTL3 & BIT(NPCX_SMBCTL3_SCL_LVL))) {
+	if((!(inst->SMBCTL3 & BIT(NPCX_SMBCTL3_SDA_LVL)) || !(inst->SMBCTL3 & BIT(NPCX_SMBCTL3_SCL_LVL)))
+	   && (data->stall_retries < I2C_TARGET_STALL_MAX_RETRIES)) {
+		/* Bus still stalled (SDA or SCL held low): keep polling every 1ms */
+		data->stall_retries++;
 		k_work_reschedule(&data->timeout_work, K_MSEC(1));
 	}
 	else {
-		LOG_DBG("SMBus released from bus stall state.");
+		/*
+		 * Either the bus was released (both lines high) or the retry budget
+		 * expired. In the expired case the bus is likely dead (e.g. host
+		 * powered off mid-transaction, unpowered pull-up rail) and will never
+		 * go high; force the recovery anyway so this work stops rescheduling
+		 * and no longer blocks deep-sleep entry.
+		 */
+		if (data->stall_retries >= I2C_TARGET_STALL_MAX_RETRIES) {
+			LOG_DBG("SMBus bus stall recovery timed out; forcing reset.");
+		} else {
+			LOG_DBG("SMBus released from bus stall state.");
+		}
+		data->stall_retries = 0;
 
 		/* Reset i2c module in target mode */
 		inst->SMBCTL2 &= ~BIT(NPCX_SMBCTL2_ENABLE);
@@ -815,6 +841,8 @@ static void i2c_ctrl_target_isr(const struct device *dev, uint8_t status)
 		inst->SMBT_OUT |= BIT(NPCX_SMBT_OUT_T_OUTST);
 		inst->SMBT_OUT &= ~BIT(NPCX_SMBT_OUT_T_OUTIE);
 
+	    /* Start a fresh bus-stall recovery poll budget */
+	    data->stall_retries = 0;
 	    k_work_reschedule(&data->timeout_work, K_MSEC(1));
 
 		inst->SMBCTL2 &= ~BIT(NPCX_SMBCTL2_ENABLE);
@@ -1291,6 +1319,14 @@ int npcx_i2c_ctrl_target_unregister(const struct device *i2c_dev,
 	/* Reset I2C module */
 	inst->SMBCTL2 &= ~BIT(NPCX_SMBCTL2_ENABLE);
 	inst->SMBCTL2 |= BIT(NPCX_SMBCTL2_ENABLE);
+
+	/*
+	 * Cancel any pending target bus-stall recovery poll. If the host went
+	 * away mid-transaction (bus left stalled with SDA/SCL held low), that
+	 * work would otherwise keep rescheduling every 1ms and block deep sleep.
+	 */
+	k_work_cancel_delayable(&data->timeout_work);
+	data->stall_retries = 0;
 
     if(inst->SMBADDR1 == addr)
     {

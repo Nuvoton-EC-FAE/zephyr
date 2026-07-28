@@ -149,13 +149,11 @@ struct npcx_i3c_config {
 	struct mdma_reg *mdma_base;
 #endif
 
-#ifdef CONFIG_PM_DEVICE
 	bool wakeup_source;
 	/* Size of I3C wui mapping array */
 	int wui_size;
 	/* Mapping table between I3C bus and wui */
 	struct npcx_wui wui_maps[];
-#endif
 };
 
 struct npcx_i3c_data {
@@ -168,9 +166,7 @@ struct npcx_i3c_data {
 	enum npcx_i3c_oper_state oper_state; /* controller operation state */
     struct i3c_target_config *target_config;
 
-#ifdef CONFIG_PM_DEVICE
 	struct miwu_callback i3c_wui_cb[NPCX_I3C_WUI_LAST];
-#endif
 
 #ifdef CONFIG_I3C_NPCX_DMA
 	uint8_t *mdma_rd_buf;
@@ -2780,8 +2776,12 @@ int npcx_i3c_activate(const struct device *dev, bool enable)
 	return ret;
 }
 
-
-#ifdef CONFIG_PM_DEVICE
+/**
+ * @brief Callback function for handling WUI interrupts for the npcx i3c controller.
+ *
+ * @param dev Pointer to the device structure for the driver instance.
+ * @param wui Pointer to the WUI structure.
+ */
 static void npcx_i3c_wui_callback(const struct device *dev, struct npcx_wui *wui)
 {
 	const struct npcx_i3c_config *const config = dev->config;
@@ -2796,7 +2796,15 @@ static void npcx_i3c_wui_callback(const struct device *dev, struct npcx_wui *wui
 	npcx_miwu_irq_disable(&config->wui_maps[NPCX_I3C_WUI_RSTW]);
 }
 
-void npcx_i3c_wakeup_enable(const struct device *dev, bool enable, uint8_t index, enum miwu_int_trig trig)
+/**
+ * @brief Enable or disable the WUI events for the npcx i3c controller.
+ *
+ * @param dev Pointer to the device structure for i3c controller instance.
+ * @param enable True to enable the WUI feature, false to disable.
+ * @param index The index of the WUI to configure.
+ * @param trig The trigger type for the WUI interrupt.
+ */
+static void npcx_i3c_wui_enable(const struct device *dev, bool enable, uint8_t index, enum miwu_int_trig trig)
 {
 	const struct npcx_i3c_config *const config = dev->config;
 	struct npcx_i3c_data *const data = dev->data;
@@ -2816,24 +2824,30 @@ void npcx_i3c_wakeup_enable(const struct device *dev, bool enable, uint8_t index
 	}
 }
 
+void npcx_i3c_wakeup_enable(const struct device *dev, bool enable)
+{
+	const struct npcx_i3c_config *const config = dev->config;
+
+	if(config->target_mode == false) {
+		npcx_i3c_wui_enable(dev, enable, NPCX_I3C_WUI_SDA, NPCX_MIWU_TRIG_LOW);
+	} else {
+		npcx_i3c_wui_enable(dev, enable, NPCX_I3C_WUI_SDA, NPCX_MIWU_TRIG_LOW);
+		npcx_i3c_wui_enable(dev, enable, NPCX_I3C_WUI_ADDRW, NPCX_MIWU_TRIG_HIGH);
+		npcx_i3c_wui_enable(dev, enable, NPCX_I3C_WUI_RSTW, NPCX_MIWU_TRIG_HIGH);
+	}
+}
+
+#ifdef CONFIG_PM_DEVICE
 static int npcx_i3c_pm_action(const struct device *dev, enum pm_device_action action)
 {
 	const struct npcx_i3c_config *const config = dev->config;
-	//const struct device *const clk_dev = DEVICE_DT_GET(NPCX_CLK_CTRL_NODE);
 	struct i3c_reg *inst = config->base;
 	int ret = 0;
 
 	switch (action) {
 	case PM_DEVICE_ACTION_RESUME:
 		if (config->wakeup_source) {
-			if(config->target_mode == false) {
-				npcx_i3c_wakeup_enable(dev, false, NPCX_I3C_WUI_SDA, NPCX_MIWU_TRIG_LOW);
-			}
-			else {
-				npcx_i3c_wakeup_enable(dev, false, NPCX_I3C_WUI_SDA, NPCX_MIWU_TRIG_LOW);
-				npcx_i3c_wakeup_enable(dev, false, NPCX_I3C_WUI_ADDRW, NPCX_MIWU_TRIG_HIGH);
-				npcx_i3c_wakeup_enable(dev, false, NPCX_I3C_WUI_RSTW, NPCX_MIWU_TRIG_HIGH);
-			}
+			npcx_i3c_wakeup_enable(dev, false);
 		} else {
 			ret = npcx_i3c_activate(dev, true);
 		}
@@ -2849,14 +2863,7 @@ static int npcx_i3c_pm_action(const struct device *dev, enum pm_device_action ac
 		}
 
 		if (config->wakeup_source) {
-			if(config->target_mode == false) {
-				npcx_i3c_wakeup_enable(dev, true, NPCX_I3C_WUI_SDA, NPCX_MIWU_TRIG_LOW);
-			}
-			else {
-				npcx_i3c_wakeup_enable(dev, true, NPCX_I3C_WUI_SDA, NPCX_MIWU_TRIG_LOW);
-				npcx_i3c_wakeup_enable(dev, true, NPCX_I3C_WUI_ADDRW, NPCX_MIWU_TRIG_HIGH);
-				npcx_i3c_wakeup_enable(dev, true, NPCX_I3C_WUI_RSTW, NPCX_MIWU_TRIG_HIGH);
-			}
+			npcx_i3c_wakeup_enable(dev, true);
 		} else {
 			ret = npcx_i3c_activate(dev, false);
 		}
@@ -3081,14 +3088,10 @@ static const struct i3c_driver_api npcx_i3c_driver_api = {
 #endif
 };
 
-#ifdef CONFIG_PM_DEVICE
 #define NPCX_I3C_PM_WAKEUP(inst)                                               \
 	.wakeup_source = (uint8_t)DT_INST_PROP_OR(inst, wakeup_source, 0),     \
 	.wui_size = NPCX_DT_WUI_ITEMS_LEN(inst),                               \
 	.wui_maps = NPCX_DT_WUI_ITEMS_LIST(inst),
-#else
-#define NPCX_I3C_PM_WAKEUP(inst)
-#endif
 
 #define I3C_NPCX_DEVICE(id)                                                                        \
 	PINCTRL_DT_INST_DEFINE(id);                                                                \
