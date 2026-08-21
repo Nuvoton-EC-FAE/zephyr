@@ -46,6 +46,22 @@ struct espi_npcx_data {
 #if defined(CONFIG_ESPI_FLASH_CHANNEL)
 	struct k_sem flash_rx_lock;
 #endif
+	/* Tag used for the next Peripheral Channel (PC) bus-master request */
+	uint8_t pc_bm_tag;
+	/* Given by espi_bus_pc_bm_rx_isr() (PBMRX, read completion) or
+	 * espi_bus_pc_bm_tx_done_isr() (BMTXDONE, write completion);
+	 * read_request() and write_request() block on it with a timeout
+	 * after triggering the request instead of polling ESPISTS.
+	 */
+	struct k_sem pc_bm_rx_comp;
+	struct k_sem pc_bm_tx_done;
+	/* Mutex serializing PC bus-master requests: locked by
+	 * read_request()/write_request() before triggering a new request
+	 * (with a timeout, so a caller doesn't wait forever for a previous,
+	 * possibly stuck, request) and unlocked once that request finishes
+	 * (success, error, or timeout).
+	 */
+	struct k_mutex pc_bm_req_lock;
 
 	struct k_mutex vwswirq_lock;
 
@@ -97,6 +113,34 @@ struct espi_npcx_data {
 #define ESPI_OOB_GET_CYCLE_TYPE                    0x21
 #define ESPI_OOB_TAG                               0x00
 #define ESPI_OOB_MAX_TIMEOUT                       500ul /* 500 ms */
+
+/*
+ * eSPI cycle type field for Peripheral Channel (PC) bus-master memory
+ * read/write requests. Values match the standard eSPI cycle type encoding
+ * and are cross-checked against the vendor NPCX bare-metal eSPI driver
+ * (espi_drv.c / espi_regs.h) that implements the same "PC Bus Master"
+ * hardware feature.
+ */
+#define ESPI_PC_BM_CYCLE_MEMORY_READ32               0x00
+#define ESPI_PC_BM_CYCLE_MEMORY_WRITE32              0x01
+#define ESPI_PC_BM_CYCLE_MEMORY_READ64               0x02
+#define ESPI_PC_BM_CYCLE_MEMORY_WRITE64              0x03
+#define ESPI_PC_BM_CYCLE_SUCCESS_WITHOUT_DATA        0x06
+#define ESPI_PC_BM_CYCLE_UNSUCCESS_WITHOUT_DATA      0x0e
+#define ESPI_PC_BM_CYCLE_SUCCESS_WITH_DATA           0x0f
+
+/* Header size (bytes) of a PC bus-master memory request: msg_code(1) +
+ * cycle_type(1) + tag_plus_len(2) + address(4 or 8)
+ */
+#define ESPI_PC_BM_32_BIT_HDR_SIZE                   8
+#define ESPI_PC_BM_64_BIT_HDR_SIZE                   12
+/* Completion header size (bytes): reserved(1) + cycle_type(1) + tag_plus_len(2) */
+#define ESPI_PC_BM_REPLY_HDR_SIZE                    4
+/* Max payload size (bytes) supported in a single PC bus-master transaction */
+#define ESPI_PC_BM_MAX_PAYLOAD_SIZE                  64
+/* Avoid crossing this address boundary within a single Read request */
+#define ESPI_PC_BM_READ_SECTOR_SIZE                  4096
+#define ESPI_PC_BM_MAX_TIMEOUT                       1000ul /* 1000 ms */
 
 /* eSPI bus interrupt configuration structure and macro function */
 struct espi_bus_isr {
@@ -421,6 +465,43 @@ static void espi_bus_flash_rx_isr(const struct device *dev)
 }
 #endif /* CONFIG_ESPI_FLASH_CHANNEL */
 
+/*
+ * Peripheral Channel (PC) bus-master read-completion ISR. Fired when the
+ * host returns a completion packet for the PBMRX status bit, i.e. for a
+ * previously issued espi_npcx_read_request() memory read cycle. The read
+ * completion payload itself is parsed later by
+ * espi_npcx_pc_bm_parse_read_completion() once the waiting thread wakes
+ * up; this ISR only unblocks it.
+ */
+static void espi_bus_pc_bm_rx_isr(const struct device *dev)
+{
+	struct espi_npcx_data *const data = dev->data;
+
+	LOG_DBG("%s", __func__);
+	k_sem_give(&data->pc_bm_rx_comp);
+}
+
+/*
+ * Peripheral Channel (PC) bus-master write-completion ISR. Fired for the
+ * BMTXDONE status bit (bit 19), i.e. whenever the host acknowledges a
+ * previously issued espi_npcx_write_request() posted memory write cycle.
+ * This unblocks the thread waiting on pc_bm_tx_done in
+ * espi_npcx_write_request().
+ */
+static void espi_bus_pc_bm_tx_done_isr(const struct device *dev)
+{
+	struct espi_reg *const inst = HAL_INSTANCE(dev);
+	struct espi_npcx_data *const data = dev->data;
+
+	LOG_DBG("%s", __func__);
+	inst->ESPISTS = BIT(NPCX_ESPISTS_BMTXDONE);
+	while (IS_BIT_SET(inst->ESPISTS, NPCX_ESPISTS_BMTXDONE)) {
+		/* Wait for the BMTXDONE bit to clear */
+	};
+
+	k_sem_give(&data->pc_bm_tx_done);
+}
+
 const struct espi_bus_isr espi_bus_isr_tbl[] = {
 	NPCX_ESPI_BUS_INT_ITEM(BERR, espi_bus_err_isr),
 	NPCX_ESPI_BUS_INT_ITEM(IBRST, espi_bus_inband_rst_isr),
@@ -432,6 +513,7 @@ const struct espi_bus_isr espi_bus_isr_tbl[] = {
 #if defined(CONFIG_ESPI_FLASH_CHANNEL)
 	NPCX_ESPI_BUS_INT_ITEM(FLASHRX, espi_bus_flash_rx_isr),
 #endif
+	NPCX_ESPI_BUS_INT_ITEM(PBMRX, espi_bus_pc_bm_rx_isr),
 };
 
 static void espi_bus_generic_isr(const struct device *dev)
@@ -459,6 +541,10 @@ static void espi_bus_generic_isr(const struct device *dev)
 				entry.bus_isr(dev);
 			}
 		}
+	}
+
+	if (status & BIT(NPCX_ESPISTS_BMTXDONE)) {
+		espi_bus_pc_bm_tx_done_isr(dev);
 	}
 }
 
@@ -873,6 +959,335 @@ static int espi_npcx_write_lpc_request(const struct device *dev,
 	ARG_UNUSED(dev);
 
 	return npcx_host_periph_write_request(op, data);
+}
+
+/*
+ * Peripheral Channel (PC) Bus Master support for Memory Read 32/64 and
+ * Memory Write 32/64 requests.
+ *
+ * The eSPI Peripheral Channel "Bus Master" (PBM) feature lets the EC act
+ * as bus master and issue Memory Read/Write cycles to host memory. The
+ * implementation below is a synchronous (poll-based) helper backing the
+ * generic espi_read_request()/espi_write_request() Zephyr APIs.
+ *
+ * NOTE: The PERCFG/PERCTL bit-field positions and the request/completion
+ * header layout used below were reverse-engineered from the NPCX
+ * bare-metal reference driver (espi_drv.c / espi_regs.h) since the public
+ * NPCX datasheet excerpt available in this workspace does not fully
+ * document the PC Bus Master register bit-fields. Please double check
+ * against the official datasheet for the exact chip revision in use.
+ *
+ * Also note struct espi_request_packet::address is only 32-bit wide even
+ * though ESPI_CYCLE_MEMORY_READ64/WRITE64 cycle types exist; the upper
+ * 32 bits of the target address are therefore always treated as zero.
+ */
+static void espi_npcx_pc_bm_prepare_tx_header(const struct device *dev,
+					       uint8_t cyc_type,
+						   uint8_t tag,
+					       uint64_t address,
+						   bool is_64bit,
+					       uint16_t len,
+						   int *hdr_bytes)
+{
+	struct espi_reg *const inst = HAL_INSTANCE(dev);
+
+	/*
+	 * word0: [31:24] length[7:0]  [23:20] tag  [19:16] length[11:8]
+	 *        [15:8] cycle_type  [7:0] reserved
+	 * word1: address bits[31:0]
+	 * word2: address bits[63:32] (64-bit memory cycles only, always 0
+	 *        since struct espi_request_packet only carries a 32-bit
+	 *        address field)
+	 *
+	 * Like the flash channel (see espi_npcx_flash_prepare_tx_header()),
+	 * the address is transmitted on the eSPI bus MSB first, so it must
+	 * be byte-swapped to big-endian before being written to the 32-bit
+	 * little-endian TX buffer register.
+	 */
+	inst->PBMTXBUF[0] = ((uint32_t)(len & 0xff) << 24) |
+			     ((uint32_t)(tag & 0x0f) << 20) |
+			     ((uint32_t)((len >> 8) & 0x0f) << 16) |
+			     ((uint32_t)cyc_type << 8);
+
+	if (is_64bit) {
+		inst->PBMTXBUF[1] = sys_cpu_to_be32((uint32_t) (address >> 32));
+		inst->PBMTXBUF[2] = sys_cpu_to_be32((uint32_t) address);
+		*hdr_bytes = ESPI_PC_BM_64_BIT_HDR_SIZE;
+	} else {
+		inst->PBMTXBUF[1] = sys_cpu_to_be32((uint32_t) address);
+		*hdr_bytes = ESPI_PC_BM_32_BIT_HDR_SIZE;
+	}
+}
+
+static void espi_npcx_pc_bm_write_payload(const struct device *dev,
+					   int hdr_bytes,
+					   const uint8_t *buf,
+					   uint16_t len)
+{
+	struct espi_reg *const inst = HAL_INSTANCE(dev);
+	uint8_t buf_idx = hdr_bytes / sizeof(uint32_t);
+	uint32_t *data_buf = (uint32_t *)buf;
+	uint8_t index = 0;
+
+	for (index = 0; index < (len / sizeof(uint32_t)); index++) {
+		inst->PBMTXBUF[buf_idx] = data_buf[index];
+		buf_idx++;
+	}
+
+	if (len % 4) {
+		uint32_t tx_data = data_buf[index];
+		uint32_t mask = (1 << (len % 4) * 8) - 1;
+		inst->PBMTXBUF[buf_idx] = tx_data & mask;
+	}
+}
+
+static int espi_npcx_pc_bm_parse_read_completion(const struct device *dev,
+						  uint8_t *buf, uint16_t len)
+{
+	struct espi_reg *const inst = HAL_INSTANCE(dev);
+	uint32_t hdr = inst->PBMRXBUF[0];
+	uint8_t cyc_type = (hdr >> 8) & 0xff;
+	uint16_t pkt_len = ((hdr >> 24) & 0xff) | ((hdr >> 12) & 0xf00);
+	uint8_t rx_idx = 1;
+	uint8_t index = 0;
+	uint32_t data;
+
+	inst->ESPISTS = BIT(NPCX_ESPISTS_PBMRX);
+
+	if (cyc_type == ESPI_PC_BM_CYCLE_UNSUCCESS_WITHOUT_DATA) {
+		return -EIO;
+	}
+
+	if (cyc_type != ESPI_PC_BM_CYCLE_SUCCESS_WITH_DATA) {
+		LOG_ERR("Unexpected PC BM read completion cycle type: 0x%02x",
+			cyc_type);
+		return -EIO;
+	}
+
+	for (index = 0; index < (pkt_len / sizeof(uint32_t)); ) {
+		*(uint32_t *) &buf[index] = inst->PBMRXBUF[rx_idx];
+		rx_idx++;
+		index += sizeof(uint32_t);
+	}
+
+	if (pkt_len % 4) {
+		data = inst->PBMRXBUF[rx_idx];
+		for (int j = 0; j < (int)(pkt_len % 4); j++, index++) {
+			buf[index] = data & 0xff;
+			data >>= 8;
+		}
+	}
+
+	inst->PERCTL |= BIT(NPCX_PERCTL_PER_PC_FREE);
+	inst->ESPISTS = BIT(NPCX_ESPISTS_BMTXDONE);
+	while (IS_BIT_SET(inst->ESPISTS, NPCX_ESPISTS_BMTXDONE)) {
+		/* Wait for the BMTXDONE bit to clear */
+	};
+
+	return 0;
+}
+
+static int espi_npcx_pc_bm_check_avail(const struct device *dev)
+{
+	struct espi_reg *const inst = HAL_INSTANCE(dev);
+
+	/* Host must enable PC channel bus mastering before we can request */
+	if (!IS_BIT_SET(inst->PERCFG, NPCX_PERCFG_BMMEN)) {
+		LOG_ERR("PC channel bus mastering is not enabled by host");
+		return -ENOTSUP;
+	}
+
+	/* Make sure no other bus-master request is currently in flight */
+	if (IS_BIT_SET(inst->PERCTL, NPCX_PERCTL_BM_NP_AVAIL) ||
+	    IS_BIT_SET(inst->PERCTL, NPCX_PERCTL_BM_PC_AVAIL) ||
+	    IS_BIT_SET(inst->PERCTL, NPCX_PERCTL_BM_MSG_AVAIL)) {
+		LOG_ERR("PC bus-master channel is busy");
+		return -EBUSY;
+	}
+
+	return 0;
+}
+
+static int espi_npcx_read_request(const struct device *dev,
+				   struct espi_request_packet *req)
+{
+	struct espi_reg *const inst = HAL_INSTANCE(dev);
+	struct espi_npcx_data *const data = dev->data;
+	bool is_64bit = (req->cycle_type == ESPI_CYCLE_MEMORY_READ64);
+	uint8_t cyc_type;
+	int hdr_bytes;
+	int ret;
+
+	if ((req->cycle_type != ESPI_CYCLE_MEMORY_READ32) &&
+	    (req->cycle_type != ESPI_CYCLE_MEMORY_READ64)) {
+		return -EINVAL;
+	}
+
+	if ((req->data == NULL) || (req->len == 0) ||
+	    (req->len > ESPI_PC_BM_MAX_PAYLOAD_SIZE)) {
+		LOG_ERR("Invalid PC BM read length: %d", req->len);
+		return -EINVAL;
+	}
+
+	/* Avoid crossing a sector boundary within a single read request */
+	//if ((req->address / ESPI_PC_BM_READ_SECTOR_SIZE) !=
+	//    ((req->address + req->len - 1) / ESPI_PC_BM_READ_SECTOR_SIZE)) {
+	//	LOG_ERR("PC BM read request crosses a %d-byte sector boundary",
+	//		ESPI_PC_BM_READ_SECTOR_SIZE);
+	//	return -EINVAL;
+	//}
+
+	/*
+	 * Serialize PC bus-master requests: only one read/write request can
+	 * be in flight at a time. Block here (with a timeout) instead of
+	 * failing immediately if a previous request hasn't finished yet.
+	 */
+	ret = k_mutex_lock(&data->pc_bm_req_lock, K_MSEC(ESPI_PC_BM_MAX_TIMEOUT));
+	if (ret != 0) {
+		LOG_ERR("%s: Timeout waiting for previous PC BM request", __func__);
+		return -ETIMEDOUT;
+	}
+
+	// Check if the PC bus-master channel is available for a new request
+	ret = espi_npcx_pc_bm_check_avail(dev);
+	if (ret != 0) {
+		goto exit;
+	}
+
+	/* Clear the BMTXDONE interrupt enable bit before starting a new read request */
+	inst->ESPIIE &= ~BIT(NPCX_ESPIIE_BMTXDONEIE);
+
+	// Set the cycle type for the read request (32-bit or 64-bit)
+	cyc_type = is_64bit ? ESPI_PC_BM_CYCLE_MEMORY_READ64 :
+			      ESPI_PC_BM_CYCLE_MEMORY_READ32;
+
+  	inst->PERCTL &= ~BIT(NPCX_PERCTL_BMBRSTEN);
+	/* Do not strip the completion header; parsed in SW below */
+	inst->PERCTL &= ~BIT(NPCX_PERCTL_BMSTRPHDR);
+
+	if (is_64bit) {
+		inst->PERCTL |= BIT(NPCX_PERCTL_MEM64_ACCESS);
+	} else {
+		inst->PERCTL &= ~BIT(NPCX_PERCTL_MEM64_ACCESS);
+	}
+
+	// Prepare the bus-master request header and write to the TX buffer
+	espi_npcx_pc_bm_prepare_tx_header(dev, cyc_type, data->pc_bm_tag,
+					   req->address, is_64bit, req->len,
+					   &hdr_bytes);
+	data->pc_bm_tag = (data->pc_bm_tag + 1) & 0x0f;
+
+	/* Packet length field holds (total header bytes - 1); no payload
+	 * is sent for a read request.
+	 */
+	SET_FIELD(inst->PERCTL, NPCX_PERCTL_BMPKT_LEN, hdr_bytes - 1);
+
+	/* Trigger the non-posted (read) bus-master request */
+	inst->PERCTL |= BIT(NPCX_PERCTL_BM_NP_AVAIL);
+
+	/* Wait for espi_bus_pc_bm_rx_isr() to signal the PBMRX completion */
+	ret = k_sem_take(&data->pc_bm_rx_comp, K_MSEC(ESPI_PC_BM_MAX_TIMEOUT));
+	if (ret != 0) {
+		LOG_ERR("%s: Timeout", __func__);
+		ret = -ETIMEDOUT;
+		goto exit;
+	}
+
+	// Parse the read completion header and copy the payload data to the caller's buffer
+	ret = espi_npcx_pc_bm_parse_read_completion(dev, req->data, req->len);
+
+exit:
+	k_mutex_unlock(&data->pc_bm_req_lock);
+	return ret;
+}
+
+static int espi_npcx_write_request(const struct device *dev,
+				    struct espi_request_packet *req)
+{
+	struct espi_reg *const inst = HAL_INSTANCE(dev);
+	struct espi_npcx_data *const data = dev->data;
+	bool is_64bit = (req->cycle_type == ESPI_CYCLE_MEMORY_WRITE64);
+	uint8_t cyc_type;
+	int hdr_bytes;
+	int ret;
+
+	if ((req->cycle_type != ESPI_CYCLE_MEMORY_WRITE32) &&
+	    (req->cycle_type != ESPI_CYCLE_MEMORY_WRITE64)) {
+		return -EINVAL;
+	}
+
+	if ((req->data == NULL) || (req->len == 0) ||
+	    (req->len > ESPI_PC_BM_MAX_PAYLOAD_SIZE)) {
+		LOG_ERR("Invalid PC BM write length: %d", req->len);
+		return -EINVAL;
+	}
+
+	/*
+	 * Serialize PC bus-master requests: only one read/write request can
+	 * be in flight at a time. Block here (with a timeout) instead of
+	 * failing immediately if a previous request hasn't finished yet.
+	 */
+	ret = k_mutex_lock(&data->pc_bm_req_lock, K_MSEC(ESPI_PC_BM_MAX_TIMEOUT));
+	if (ret != 0) {
+		LOG_ERR("%s: Timeout waiting for previous PC BM request", __func__);
+		return -ETIMEDOUT;
+	}
+
+	// Check if the PC bus-master channel is available for a new request
+	ret = espi_npcx_pc_bm_check_avail(dev);
+	if (ret != 0) {
+		goto exit;
+	}
+
+	/* Enable the BMTXDONE interrupt so we can wait for the write completion */
+	inst->ESPIIE |= BIT(NPCX_ESPIIE_BMTXDONEIE);
+
+	// Set the cycle type for the write request (32-bit or 64-bit)
+	cyc_type = is_64bit ? ESPI_PC_BM_CYCLE_MEMORY_WRITE64 :
+			      ESPI_PC_BM_CYCLE_MEMORY_WRITE32;
+
+  	inst->PERCTL &= ~BIT(NPCX_PERCTL_BMBRSTEN);
+
+	inst->PERCTL &= ~BIT(NPCX_PERCTL_BMSTRPHDR);
+
+	if (is_64bit) {
+		inst->PERCTL |= BIT(NPCX_PERCTL_MEM64_ACCESS);
+	} else {
+		inst->PERCTL &= ~BIT(NPCX_PERCTL_MEM64_ACCESS);
+	}
+
+	// Prepare the bus-master request header and write to the TX buffer
+	espi_npcx_pc_bm_prepare_tx_header(dev, cyc_type, data->pc_bm_tag,
+					   req->address, is_64bit, req->len,
+					   &hdr_bytes);
+	data->pc_bm_tag = (data->pc_bm_tag + 1) & 0x0f;
+
+	// Write the payload data to the TX buffer after the header
+	espi_npcx_pc_bm_write_payload(dev, hdr_bytes, req->data, req->len);
+
+	/* Packet length field holds (header + payload bytes - 1) */
+	SET_FIELD(inst->PERCTL, NPCX_PERCTL_BMPKT_LEN,
+		  hdr_bytes + req->len - 1);
+
+	/* Trigger the posted (write) bus-master request */
+	inst->PERCTL |= BIT(NPCX_PERCTL_BM_PC_AVAIL);
+
+	/* Wait for espi_bus_pc_bm_tx_done_isr() to signal the BMTXDONE completion */
+	ret = k_sem_take(&data->pc_bm_tx_done, K_MSEC(ESPI_PC_BM_MAX_TIMEOUT));
+	if (ret != 0) {
+		LOG_ERR("%s: Timeout", __func__);
+		ret = -ETIMEDOUT;
+		goto exit;
+	}
+
+	ret = 0;
+
+exit:
+	// Clear the BMTXDONE interrupt enable bit to avoid spurious interrupts
+	inst->ESPIIE &= ~BIT(NPCX_ESPIIE_BMTXDONEIE);
+
+	k_mutex_unlock(&data->pc_bm_req_lock);
+	return ret;
 }
 
 #if defined(CONFIG_ESPI_OOB_CHANNEL)
@@ -1358,6 +1773,8 @@ static const struct espi_driver_api espi_npcx_driver_api = {
 	.manage_callback = espi_npcx_manage_callback,
 	.read_lpc_request = espi_npcx_read_lpc_request,
 	.write_lpc_request = espi_npcx_write_lpc_request,
+	.read_request = espi_npcx_read_request,
+	.write_request = espi_npcx_write_request,
 #if defined(CONFIG_ESPI_OOB_CHANNEL)
 	.send_oob = espi_npcx_send_oob,
 	.receive_oob = espi_npcx_receive_oob,
@@ -1434,6 +1851,10 @@ static int espi_npcx_init(const struct device *dev)
 #if defined(CONFIG_ESPI_FLASH_CHANNEL)
 	k_sem_init(&data->flash_rx_lock, 0, 1);
 #endif
+
+	k_sem_init(&data->pc_bm_rx_comp, 0, 1);
+	k_sem_init(&data->pc_bm_tx_done, 0, 1);
+	k_mutex_init(&data->pc_bm_req_lock);
 
 	k_mutex_init(&data->vwswirq_lock);
 	

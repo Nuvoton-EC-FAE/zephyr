@@ -641,7 +641,16 @@ struct espi_reg {
 	volatile uint32_t PERCTL;
 	/* 0x050: Status Image Register */
 	volatile uint16_t STATUS_IMG;
+#if defined(CONFIG_SOC_SERIES_NPCX4)
+	volatile uint16_t reserved2_1;
+	/* 0x54: Peropheral Channel Control for Bus Master Write */
+	volatile uint32_t PERCTLBW;
+	/* 0x58: Peropheral Target Message Receive Buffer Read Head */
+	volatile uint32_t PERRXRDHEAD;
+	volatile uint16_t reserved2[74];
+#else
 	volatile uint16_t reserved2[79];
+#endif
 	/* 0x0F0: NPCX specific eSPI Register1 */
 	volatile uint8_t NPCX_ONLY_ESPI_REG1;
 	/* 0x0F1: NPCX specific eSPI Register2 */
@@ -680,7 +689,16 @@ struct espi_reg {
 	volatile uint32_t reserved10[14];
 	/* 0x4FC: Flash Channel Control used in 'direct' mode */
 	volatile uint32_t FLASHCTL_DIRECT;
+#if defined(CONFIG_SOC_SERIES_NPCX4)
+	/* 0x500 - 547: Peripheral Bus Master Receive Buffer 0-17 */
+	volatile uint32_t PBMRXBUF[18];
+	volatile uint32_t reserved12[14];
+	/* 0x580 - 5CB: Peripheral Bus Master Transmit Buffer 0-18 */
+	volatile uint32_t PBMTXBUF[19];
+	volatile uint32_t reserved12_1[13];
+#else
 	volatile uint32_t reserved12[64];
+#endif
 	/* 0x600 - 63F */
 	volatile uint32_t FLASH_PRTR_BADDR[16];
 	/* 0x640 - 67F */
@@ -821,6 +839,36 @@ struct espi_reg {
 #define NPCX_ONLY_ESPI_REG1_UNLOCK_REG2         0x55
 #define NPCX_ONLY_ESPI_REG1_LOCK_REG2           0
 #define NPCX_ONLY_ESPI_REG2_TRANS_END_CONFIG    4
+
+/*
+ * Peripheral Channel (PC) Bus Mastering register fields.
+ * Bit positions below are derived from the NPCX bare-metal eSPI driver
+ * (ESPI_PERCFG/ESPI_PERCTL definitions in espi_regs.h) and should be
+ * cross-checked against the datasheet for the exact chip variant in use.
+ */
+#define NPCX_PERCFG_BMMEN                2
+#define NPCX_PERCFG_PERPLSIZE            FIELD(10, 3)
+#define NPCX_PERCFG_BMREQSIZE            FIELD(13, 3)
+
+#define NPCX_PERCTL_PER_PC_FREE          0
+#define NPCX_PERCTL_BMDMA_TR_SL          1
+#define NPCX_PERCTL_BMSTRPHDR            2
+#define NPCX_PERCTL_BMDMATHRESH          FIELD(3, 2)
+#define NPCX_PERCTL_BMBURSTSIZE          FIELD(5, 8)
+#define NPCX_PERCTL_RSTPBUFHEADS         13
+#define NPCX_PERCTL_MEM64_ACCESS         14
+#define NPCX_PERCTL_RSTPBUFHEAD          15
+#define NPCX_PERCTL_BMBRSTEN             16
+#define NPCX_PERCTL_BMBURST_BFULL        17
+#define NPCX_PERCTL_BM_NP_AVAIL          19
+#define NPCX_PERCTL_BM_PC_AVAIL          20
+#define NPCX_PERCTL_BM_MSG_AVAIL         21
+#define NPCX_PERCTL_BMPKT_LEN            FIELD(24, 8)
+
+#define NPCX_PERCTLBW_BMWDMATHRESH       FIELD(3, 2)
+#define NPCX_PERCTLBW_BMWBURSTSIZE       FIELD(5, 8)
+#define NPCX_PERCTLBW_BMWBRSTEN          16
+#define NPCX_PERCTLBW_BMWBURST_BEMPTY    17
 
 /*
  * Mobile System Wake-Up Control (MSWC) device registers
@@ -1037,6 +1085,8 @@ struct shm_reg {
 #define NPCX_HOFS_CTL_HOFS2W_IE     	 3
 #define NPCX_SMCE_STS_HSEM3W             4
 #define NPCX_SMCE_STS_HSEM4W             5
+#define NPCX_SMCE_CTL_HSEM3_IE           3
+#define NPCX_SMCE_CTL_HSEM4_IE           4
 #define NPCX_HOFSE_STS_HOFS3R       	 0
 #define NPCX_HOFSE_STS_HOFS3W       	 1
 #define NPCX_HOFSE_STS_HOFS4R       	 2
@@ -1045,6 +1095,8 @@ struct shm_reg {
 #define NPCX_HOFSE_CTL_HOFS3W_IE     	 1
 #define NPCX_HOFSE_CTL_HOFS4R_IE     	 2
 #define NPCX_HOFSE_CTL_HOFS4W_IE     	 3
+#define NPCX_WINE_SIZE_RWIN3_SIZE_FIELD   FIELD(0, 4)
+#define NPCX_WINE_SIZE_RWIN4_SIZE_FIELD   FIELD(4, 4)
 #define NPCX_SHM_CTL_STALL_HOST			 6
 
 

@@ -380,7 +380,7 @@ struct espi_request_packet {
 	enum espi_cycle_type cycle_type;
 	uint8_t tag;
 	uint16_t len;
-	uint32_t address;
+	uint64_t address;
 	uint8_t *data;
 };
 

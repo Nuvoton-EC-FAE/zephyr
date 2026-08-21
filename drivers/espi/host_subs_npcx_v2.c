@@ -541,7 +541,7 @@ static void host_shared_mem_region_init(void)
 	inst_shm->WIN3_RD_PROT = 0;
 
 	/* Configure Win3 size for ec host command. */
-	SET_FIELD(inst_shm->WIN_SIZE, NPCX_WIN_SIZE_RWIN3_SIZE_FIELD,
+	SET_FIELD(inst_shm->WINE_SIZE, NPCX_WINE_SIZE_RWIN3_SIZE_FIELD,
 			host_shd_mem_wnd_size_sl(CONFIG_ESPI_PERIPHERAL_SHARED_WINDOW_3_SIZE));
 	inst_shm->WIN_BASE3 = (uint32_t)shm_wnd3_mmap;
 
@@ -559,7 +559,7 @@ static void host_shared_mem_region_init(void)
 	inst_shm->WIN4_RD_PROT = 0;
 
 	/* Configure Win4 size for ec host command. */
-	SET_FIELD(inst_shm->WIN_SIZE, NPCX_WIN_SIZE_RWIN4_SIZE_FIELD,
+	SET_FIELD(inst_shm->WINE_SIZE, NPCX_WINE_SIZE_RWIN4_SIZE_FIELD,
 			host_shd_mem_wnd_size_sl(CONFIG_ESPI_PERIPHERAL_SHARED_WINDOW_4_SIZE));
 	inst_shm->WIN_BASE4 = (uint32_t)shm_wnd4_mmap;
 
