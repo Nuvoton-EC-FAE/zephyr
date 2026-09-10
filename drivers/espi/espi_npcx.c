@@ -142,6 +142,9 @@ struct espi_npcx_data {
 #define ESPI_PC_BM_READ_SECTOR_SIZE                  4096
 #define ESPI_PC_BM_MAX_TIMEOUT                       1000ul /* 1000 ms */
 
+/* Timeout for waiting VWSWIRQ.DIRTY bit to be cleared by hardware */
+#define ESPI_VWSWIRQ_DIRTY_MAX_TIMEOUT_US            10000ul /* 10 ms */
+
 /* eSPI bus interrupt configuration structure and macro function */
 struct espi_bus_isr {
 	uint8_t status_bit; /* bit order in ESPISTS register */
@@ -1047,7 +1050,7 @@ static int espi_npcx_pc_bm_parse_read_completion(const struct device *dev,
 	struct espi_reg *const inst = HAL_INSTANCE(dev);
 	uint32_t hdr = inst->PBMRXBUF[0];
 	uint8_t cyc_type = (hdr >> 8) & 0xff;
-	uint16_t pkt_len = ((hdr >> 24) & 0xff) | ((hdr >> 12) & 0xf00);
+	uint16_t pkt_len = ((hdr >> 24) & 0xff) | ((hdr >> 8) & 0xf00);
 	uint8_t rx_idx = 1;
 	uint8_t index = 0;
 	uint32_t data;
@@ -1197,7 +1200,11 @@ static int espi_npcx_read_request(const struct device *dev,
 	ret = espi_npcx_pc_bm_parse_read_completion(dev, req->data, req->len);
 
 exit:
-	k_mutex_unlock(&data->pc_bm_req_lock);
+	if (k_mutex_unlock(&data->pc_bm_req_lock) != 0) {
+		LOG_ERR("%s: Failed to unlock pc_bm_req_lock", __func__);
+		ret = -EIO;
+	}
+	
 	return ret;
 }
 
@@ -1286,7 +1293,10 @@ exit:
 	// Clear the BMTXDONE interrupt enable bit to avoid spurious interrupts
 	inst->ESPIIE &= ~BIT(NPCX_ESPIIE_BMTXDONEIE);
 
-	k_mutex_unlock(&data->pc_bm_req_lock);
+	if (k_mutex_unlock(&data->pc_bm_req_lock) != 0) {
+		LOG_ERR("%s: Failed to unlock pc_bm_req_lock", __func__);
+		ret = -EIO;
+	}
 	return ret;
 }
 
@@ -1711,7 +1721,8 @@ int npcx_espi_vw_send_swirq(const struct device *dev, uint8_t swirq_num, bool ed
 		return -EINVAL;
 	}
 
-	if (IS_BIT_SET(inst->VWSWIRQ, NPCX_VWSWIRQ_DIRTY)) {
+	if (!WAIT_FOR(!IS_BIT_SET(inst->VWSWIRQ, NPCX_VWSWIRQ_DIRTY),
+		      ESPI_VWSWIRQ_DIRTY_MAX_TIMEOUT_US, k_busy_wait(10))) {
 		LOG_ERR("Previous SWIRQ is still pending");
 		return -EBUSY;
 	}
@@ -1753,7 +1764,7 @@ int npcx_espi_vw_send_swirq(const struct device *dev, uint8_t swirq_num, bool ed
 
 	/* Set corresponding bit in SWIRQ register to send SWIRQ */
 	inst->VWSWIRQ = vwswirq;
-	LOG_ERR("Set VWSWIRQ: 0x%08X", vwswirq);
+	LOG_INF("Set VWSWIRQ: 0x%08X", vwswirq);
 
 	/* unlock the SWIRQ register */
 	k_mutex_unlock(&data->vwswirq_lock);
