@@ -503,7 +503,7 @@ static void host_shared_mem_region_init(void)
 			host_shd_mem_wnd_size_sl(CONFIG_ESPI_PERIPHERAL_SHARED_WINDOW_1_SIZE));
 	inst_shm->WIN_BASE1 = (uint32_t)shm_wnd1_mmap;
 
-	LOG_ERR("%s: shm_wnd1_mmap 0x%08x, size %d", __func__,
+	LOG_INF("%s: shm_wnd1_mmap 0x%08x, size %d", __func__,
 		(uint32_t)shm_wnd1_mmap, CONFIG_ESPI_PERIPHERAL_SHARED_WINDOW_1_SIZE);
 
 	/* Disable interrupt by host read to offset in window 1 */
@@ -524,7 +524,7 @@ static void host_shared_mem_region_init(void)
 			host_shd_mem_wnd_size_sl(CONFIG_ESPI_PERIPHERAL_SHARED_WINDOW_2_SIZE));
 	inst_shm->WIN_BASE2 = (uint32_t)shm_wnd2_mmap;
 
-	LOG_ERR("%s: shm_wnd2_mmap 0x%08x, size %d", __func__,
+	LOG_INF("%s: shm_wnd2_mmap 0x%08x, size %d", __func__,
 		(uint32_t)shm_wnd2_mmap, CONFIG_ESPI_PERIPHERAL_SHARED_WINDOW_2_SIZE);
 	
 	/* Disable interrupt by host read to offset in window 2 */
@@ -545,6 +545,9 @@ static void host_shared_mem_region_init(void)
 			host_shd_mem_wnd_size_sl(CONFIG_ESPI_PERIPHERAL_SHARED_WINDOW_3_SIZE));
 	inst_shm->WIN_BASE3 = (uint32_t)shm_wnd3_mmap;
 
+	LOG_INF("%s: shm_wnd3_mmap 0x%08x, size %d", __func__,
+		(uint32_t)shm_wnd3_mmap, CONFIG_ESPI_PERIPHERAL_SHARED_WINDOW_3_SIZE);
+
 	/* Disable interrupt by host read to offset in window 3 */
 	inst_shm->HOFSE_CTL &= ~BIT(NPCX_HOFSE_CTL_HOFS3R_IE);
 	/* enable interrupt by host write to offset in window 3 */
@@ -562,6 +565,9 @@ static void host_shared_mem_region_init(void)
 	SET_FIELD(inst_shm->WINE_SIZE, NPCX_WINE_SIZE_RWIN4_SIZE_FIELD,
 			host_shd_mem_wnd_size_sl(CONFIG_ESPI_PERIPHERAL_SHARED_WINDOW_4_SIZE));
 	inst_shm->WIN_BASE4 = (uint32_t)shm_wnd4_mmap;
+
+	LOG_INF("%s: shm_wnd4_mmap 0x%08x, size %d", __func__,
+		(uint32_t)shm_wnd4_mmap, CONFIG_ESPI_PERIPHERAL_SHARED_WINDOW_4_SIZE);
 
 	/* Disable interrupt by host read to offset in window 4 */
 	inst_shm->HOFSE_CTL &= ~BIT(NPCX_HOFSE_CTL_HOFS4R_IE);
