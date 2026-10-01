@@ -104,7 +104,7 @@ static inline void qspi_npcx_config_dra_4byte_mode(const struct device *dev,
 	struct fiu_reg *const inst = HAL_INSTANCE(dev);
 
 #if defined(CONFIG_FLASH_NPCX_FIU_DRA_V1)
-	if (qspi_cfg->enter_4ba != 0) {
+	if (qspi_cfg->four_byte_addr == true) {
 		if ((qspi_cfg->flags & NPCX_QSPI_SEC_FLASH_SL) != 0) {
 			inst->SPI1_DEV |= BIT(NPCX_SPI1_DEV_FOUR_BADDR_CS11);
 		} else {
@@ -115,7 +115,7 @@ static inline void qspi_npcx_config_dra_4byte_mode(const struct device *dev,
 				    BIT(NPCX_SPI1_DEV_FOUR_BADDR_CS10));
 	}
 #elif defined(CONFIG_FLASH_NPCX_FIU_DRA_V2)
-	if (qspi_cfg->enter_4ba != 0) {
+	if (qspi_cfg->four_byte_addr == true) {
 		SET_FIELD(inst->SPI_DEV, NPCX_SPI_DEV_NADDRB, NPCX_DEV_NUM_ADDR_4BYTE);
 	}
 #endif
@@ -134,15 +134,42 @@ static inline void qspi_npcx_config_dra_mode(const struct device *dev,
 		SET_FIELD(inst->BURST_CFG, NPCX_BURST_CFG_SPI_DEV_SEL, spi_dev_num);
 	}
 
-	/* Enable quad mode of Direct Read Mode if needed */
-	if (qspi_cfg->qer_type != JESD216_DW15_QER_NONE) {
-		inst->RESP_CFG |= BIT(NPCX_RESP_CFG_QUAD_EN);
-	} else {
-		inst->RESP_CFG &= ~BIT(NPCX_RESP_CFG_QUAD_EN);
-	}
-
 	/* Selects the SPI read access type of Direct Read Access mode */
-	SET_FIELD(inst->SPI_FL_CFG, NPCX_SPI_FL_CFG_RD_MODE, qspi_cfg->rd_mode);
+	switch (qspi_cfg->rd_mode) {
+	case NPCX_RD_MODE_NORMAL:
+		inst->RESP_CFG &= ~BIT(NPCX_RESP_CFG_QUAD_EN);
+		SET_FIELD(inst->SPI_FL_CFG, NPCX_SPI_FL_CFG_RD_MODE, SPI_FL_CFG_RD_MODE_NORMAL);
+		break;
+	case NPCX_RD_MODE_FAST:
+		inst->RESP_CFG &= ~BIT(NPCX_RESP_CFG_QUAD_EN);
+		SET_FIELD(inst->SPI_FL_CFG, NPCX_SPI_FL_CFG_RD_MODE, SPI_FL_CFG_RD_MODE_FAST);
+		break;
+#if defined(CONFIG_SOC_SERIES_NPCX4)
+	case NPCX_RD_MODE_FAST_DUAL_OUTPUT:
+		inst->RESP_CFG &= ~BIT(NPCX_RESP_CFG_QUAD_EN);
+		SET_FIELD(inst->SPI_FL_CFG, NPCX_SPI_FL_CFG_RD_MODE, SPI_FL_CFG_RD_MODE_FAST_OUTPUT);
+		break;
+#endif /* CONFIG_SOC_SERIES_NPCX4 */
+	case NPCX_RD_MODE_FAST_DUAL_IO:
+		inst->RESP_CFG &= ~BIT(NPCX_RESP_CFG_QUAD_EN);
+		SET_FIELD(inst->SPI_FL_CFG, NPCX_SPI_FL_CFG_RD_MODE, SPI_FL_CFG_RD_MODE_FAST_IO);
+		break;
+#if defined(CONFIG_SOC_SERIES_NPCX4)
+	case NPCX_RD_MODE_FAST_QUAD_OUTPUT:
+		SET_FIELD(inst->SPI_FL_CFG, NPCX_SPI_FL_CFG_RD_MODE, SPI_FL_CFG_RD_MODE_FAST_OUTPUT);
+		inst->RESP_CFG |= BIT(NPCX_RESP_CFG_QUAD_EN);
+		break;
+#endif /* CONFIG_SOC_SERIES_NPCX4 */
+	case NPCX_RD_MODE_FAST_QUAD_IO:
+		SET_FIELD(inst->SPI_FL_CFG, NPCX_SPI_FL_CFG_RD_MODE, SPI_FL_CFG_RD_MODE_FAST_IO);
+		inst->RESP_CFG |= BIT(NPCX_RESP_CFG_QUAD_EN);
+		break;
+	default:
+		LOG_WRN("Unsupported read mode: %d", qspi_cfg->rd_mode);
+		inst->RESP_CFG &= ~BIT(NPCX_RESP_CFG_QUAD_EN);
+		SET_FIELD(inst->SPI_FL_CFG, NPCX_SPI_FL_CFG_RD_MODE, SPI_FL_CFG_RD_MODE_FAST);
+		break;
+	}
 
 	/* Enable/Disable 4 byte address mode for Direct Read Access (DRA) */
 	qspi_npcx_config_dra_4byte_mode(dev, qspi_cfg);
@@ -174,7 +201,7 @@ int qspi_npcx_fiu_uma_transceive(const struct device *dev, struct npcx_uma_cfg *
 
 	if ((flags & NPCX_UMA_ACCESS_ADDR) != 0) {
 		/* 3-byte or 4-byte address? */
-		const int addr_start = (data->cur_cfg->enter_4ba != 0) ? 0 : 1;
+		const int addr_start = (data->cur_cfg->four_byte_addr == true) ? 0 : 1;
 
 		for (size_t i = addr_start; i < 4; i++) {
 			LOG_DBG("addr %d, %02x", i, cfg->addr.u8[i]);

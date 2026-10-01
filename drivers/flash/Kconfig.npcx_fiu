@@ -65,3 +65,16 @@ config FLASH_NPCX_FIU_SUPP_DRA_2_DEV
 	  Read Access (DRA) on QSPI bus.
 
 endif #FLASH_NPCX_FIU_QSPI
+
+if FLASH_NPCX_FIU_NOR
+
+config FLASH_NPCX_FIU_NOR_SFDP_RUNTIME
+	bool "Read flash parameters at runtime"
+	default n
+	select FLASH_JESD216_API
+	help
+	  Read all flash device characteristics from the device at runtime.
+	  This option is the most flexible as it should provide functionality
+	  for all supported JESD216-compatible devices.
+
+endif #FLASH_NPCX_FIU_NOR

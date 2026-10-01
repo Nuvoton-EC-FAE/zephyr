@@ -26,27 +26,31 @@ LOG_MODULE_REGISTER(flash_npcx_fiu_nor, CONFIG_FLASH_LOG_LEVEL);
 #define BLOCK_64K_SIZE KB(64)
 #define BLOCK_4K_SIZE  KB(4)
 
+#define NUM_OF_PARAMETER_HEADER 	1
+#define NUM_OF_BFP_ENTRIES 			16
+
 /* Device config */
 struct flash_npcx_nor_config {
 	/* QSPI bus device for mutex control and bus configuration */
 	const struct device *qspi_bus;
 	/* Mapped address for flash read via direct access */
 	uintptr_t mapped_addr;
-	/* Size of nor device in bytes, from size property */
-	uint32_t flash_size;
 	/* Maximum chip erase time-out in ms */
 	uint32_t max_timeout;
-	/* SPI Nor device configuration on QSPI bus */
-	struct npcx_qspi_cfg qspi_cfg;
-#if defined(CONFIG_FLASH_PAGE_LAYOUT)
-	struct flash_pages_layout layout;
-#endif
 };
 
 /* Device data */
 struct flash_npcx_nor_data {
 	/* Specific control operation for Quad-SPI Nor Flash */
 	uint32_t operation;
+	/* Size of nor device in bytes, from size property */
+	uint32_t flash_size;
+	/* SPI Nor device configuration on QSPI bus */
+	struct npcx_qspi_cfg qspi_cfg;
+
+#if defined(CONFIG_FLASH_PAGE_LAYOUT)
+	struct flash_pages_layout layout;
+#endif
 };
 
 static const struct flash_parameters flash_npcx_parameters = {
@@ -76,7 +80,7 @@ static int flash_npcx_uma_transceive(const struct device *dev, struct npcx_uma_c
 	int ret;
 
 	/* Lock SPI bus and configure it if needed */
-	qspi_npcx_fiu_mutex_lock_configure(config->qspi_bus, &config->qspi_cfg,
+	qspi_npcx_fiu_mutex_lock_configure(config->qspi_bus, &data->qspi_cfg,
 					   data->operation);
 
 	/* Execute UMA transaction */
@@ -158,26 +162,72 @@ static int flash_npcx_nor_wait_until_ready(const struct device *dev)
 	return -EBUSY;
 }
 
-static int flash_npcx_nor_read_status_regs(const struct device *dev, uint8_t *sts_reg)
-{
-	int ret = flash_npcx_uma_read(dev, SPI_NOR_CMD_RDSR, sts_reg, 1);
-
-	if (ret != 0) {
-		return ret;
-	}
-	return flash_npcx_uma_read(dev, SPI_NOR_CMD_RDSR2, sts_reg + 1, 1);
-}
-
-static int flash_npcx_nor_write_status_regs(const struct device *dev, uint8_t *sts_reg)
+static int flash_npcx_nor_read_status_regs(const struct device *dev, uint8_t *sts_reg, uint8_t num_regs)
 {
 	int ret;
+
+	if (sts_reg == NULL || num_regs == 0) {
+		return -EINVAL;
+	}
+
+	if (num_regs >= 1) {
+		ret = flash_npcx_uma_read(dev, SPI_NOR_CMD_RDSR, sts_reg, 1);
+		if (ret != 0) {
+			return ret;
+		}
+	}
+
+	if (num_regs >= 2) {
+		ret = flash_npcx_uma_read(dev, SPI_NOR_CMD_RDSR2, sts_reg + 1, 1);
+		if (ret != 0) {
+			return ret;
+		}
+	}
+
+	if (num_regs >= 3) {
+		ret = flash_npcx_uma_read(dev, SPI_NOR_CMD_RDSR3, sts_reg + 2, 1);
+		if (ret != 0) {
+			return ret;
+		}
+	}
+	return 0;
+}
+
+static int flash_npcx_nor_write_status_regs(const struct device *dev, uint8_t *sts_reg, uint8_t num_regs)
+{
+	int ret;
+
+	if (sts_reg == NULL || num_regs == 0) {
+		return -EINVAL;
+	}
 
 	ret = flash_npcx_uma_cmd_only(dev, SPI_NOR_CMD_WREN);
 	if (ret != 0) {
 		return ret;
 	}
 
-	ret = flash_npcx_uma_write(dev, SPI_NOR_CMD_WRSR, sts_reg, 2);
+	ret = flash_npcx_uma_write(dev, SPI_NOR_CMD_WRSR, sts_reg, num_regs);
+	if (ret != 0) {
+		return ret;
+	}
+
+	return flash_npcx_nor_wait_until_ready(dev);
+}
+
+static int flash_npcx_nor_write_status_by_cmd(const struct device *dev, uint8_t cmd_code, uint8_t *sts_reg, uint8_t num_regs)
+{
+	int ret;
+
+	if (sts_reg == NULL || num_regs == 0) {
+		return -EINVAL;
+	}
+
+	ret = flash_npcx_uma_cmd_only(dev, SPI_NOR_CMD_WREN);
+	if (ret != 0) {
+		return ret;
+	}
+
+	ret = flash_npcx_uma_write(dev, cmd_code, sts_reg, num_regs);
 	if (ret != 0) {
 		return ret;
 	}
@@ -224,9 +274,9 @@ static void flash_npcx_nor_pages_layout(const struct device *dev,
 					const struct flash_pages_layout **layout,
 					size_t *layout_size)
 {
-	const struct flash_npcx_nor_config *config = dev->config;
+	struct flash_npcx_nor_data *dev_data = dev->data;
 
-	*layout = &config->layout;
+	*layout = &dev_data->layout;
 	*layout_size = 1;
 }
 #endif /* CONFIG_FLASH_PAGE_LAYOUT */
@@ -238,12 +288,12 @@ static int flash_npcx_nor_read(const struct device *dev, off_t addr,
 	struct flash_npcx_nor_data *dev_data = dev->data;
 
 	/* Out of the region of nor flash device? */
-	if (!is_within_region(addr, size, 0, config->flash_size)) {
+	if (!is_within_region(addr, size, 0, dev_data->flash_size)) {
 		return -EINVAL;
 	}
 
 	/* Lock/Unlock SPI bus also for DRA mode */
-	qspi_npcx_fiu_mutex_lock_configure(config->qspi_bus, &config->qspi_cfg,
+	qspi_npcx_fiu_mutex_lock_configure(config->qspi_bus, &dev_data->qspi_cfg,
 					   dev_data->operation);
 
 	/* Trigger Direct Read Access (DRA) via reading memory mapped-address */
@@ -256,11 +306,11 @@ static int flash_npcx_nor_read(const struct device *dev, off_t addr,
 
 static int flash_npcx_nor_erase(const struct device *dev, off_t addr, size_t size)
 {
-	const struct flash_npcx_nor_config *config = dev->config;
+	struct flash_npcx_nor_data *dev_data = dev->data;
 	int ret = 0;
 
 	/* Out of the region of nor flash device? */
-	if (!is_within_region(addr, size, 0, config->flash_size)) {
+	if (!is_within_region(addr, size, 0, dev_data->flash_size)) {
 		LOG_ERR("Addr %ld, size %d are out of range", addr, size);
 		return -EINVAL;
 	}
@@ -278,7 +328,7 @@ static int flash_npcx_nor_erase(const struct device *dev, off_t addr, size_t siz
 	}
 
 	/* Select erase opcode by size */
-	if (size == config->flash_size) {
+	if (size == dev_data->flash_size) {
 		flash_npcx_uma_cmd_only(dev, SPI_NOR_CMD_WREN);
 		/* Send chip erase command */
 		flash_npcx_uma_cmd_only(dev, SPI_NOR_CMD_CE);
@@ -309,13 +359,13 @@ static int flash_npcx_nor_erase(const struct device *dev, off_t addr, size_t siz
 static int flash_npcx_nor_write(const struct device *dev, off_t addr,
 				  const void *data, size_t size)
 {
-	const struct flash_npcx_nor_config *config = dev->config;
+	struct flash_npcx_nor_data *dev_data = dev->data;
 	uint8_t *tx_buf = (uint8_t *)data;
 	int ret = 0;
 	size_t sz_write;
 
 	/* Out of the region of nor flash device? */
-	if (!is_within_region(addr, size, 0, config->flash_size)) {
+	if (!is_within_region(addr, size, 0, dev_data->flash_size)) {
 		return -EINVAL;
 	}
 
@@ -526,64 +576,281 @@ static const struct flash_driver_api flash_npcx_nor_driver_api = {
 #endif
 };
 
-static int flash_npcx_nor_init(const struct device *dev)
+#ifdef CONFIG_FLASH_NPCX_FIU_NOR_SFDP_RUNTIME
+static int flash_npcx_nor_sfdp_config(const struct device *dev)
 {
-	const struct flash_npcx_nor_config *config = dev->config;
+	struct flash_npcx_nor_data *data = dev->data;
+	uint8_t sfdp_buf[JESD216_SFDP_SIZE(NUM_OF_PARAMETER_HEADER)] __aligned(4) = {0};
+	uint32_t bfp_buf[NUM_OF_BFP_ENTRIES] = {0};
+	struct jesd216_sfdp_header *sfdp = (struct jesd216_sfdp_header *) sfdp_buf;
+	const struct jesd216_param_header *bfpt_header = &sfdp->phdr[0];
+	struct jesd216_bfp *bfp = (struct jesd216_bfp *)bfp_buf;
+	struct jesd216_bfp_dw15 dw15;
+	struct jesd216_bfp_dw16 dw16;
 	int ret;
 
-	if (!IS_ENABLED(CONFIG_FLASH_NPCX_FIU_NOR_INIT)) {
+	/* BFPT is the first parameter table in the SFDP hierarchy. */
+	ret = flash_npcx_nor_read_sfdp(dev, 0, sfdp_buf, sizeof(sfdp_buf));
+	if (ret != 0) {
+		LOG_WRN("SFDP header read failed: %d", ret);
+		return ret;
+	}
+
+	if (jesd216_sfdp_magic(sfdp) != JESD216_SFDP_MAGIC) {
+		LOG_WRN("Invalid SFDP magic: 0x%08x", jesd216_sfdp_magic(sfdp));
+		return -EINVAL;
+	}
+
+	LOG_DBG("SFDP v%u.%u: %u parameter headers", sfdp->rev_major,
+		sfdp->rev_minor, sfdp->nph + 1U);
+
+	if (jesd216_param_id(bfpt_header) != JESD216_SFDP_PARAM_ID_BFP) {
+		LOG_WRN("SFDP PH0 is not BFPT");
+		return -ENOTSUP;
+	}
+
+	LOG_DBG("SFDP PH0: ID 0x%04x, rev %u.%u: %u DW @ 0x%06x",
+		jesd216_param_id(bfpt_header), bfpt_header->rev_major, bfpt_header->rev_minor,
+		bfpt_header->len_dw, jesd216_param_addr(bfpt_header));
+
+	ret = flash_npcx_nor_read_sfdp(dev, jesd216_param_addr(bfpt_header), bfp_buf,
+					 MIN(bfpt_header->len_dw, NUM_OF_BFP_ENTRIES) * sizeof(uint32_t));
+	if (ret != 0) {
+		LOG_WRN("BFPT read failed: %d", ret);
+		return ret;
+	}
+
+	data->flash_size = (uint32_t) (jesd216_bfp_density(bfp) / 8U);
+	LOG_DBG("SFDP DW2 density: %u bytes", data->flash_size);
+
+#if defined(CONFIG_FLASH_PAGE_LAYOUT)
+	uint32_t pages_size = jesd216_bfp_page_size(bfpt_header, bfp);
+	data->layout.pages_size = pages_size;
+	data->layout.pages_count = data->flash_size / pages_size;
+#endif /* CONFIG_FLASH_PAGE_LAYOUT */
+
+	switch (data->qspi_cfg.rd_mode) {
+		case NPCX_RD_MODE_NORMAL:
+		case NPCX_RD_MODE_FAST:
+			break;
+		case NPCX_RD_MODE_FAST_DUAL_OUTPUT:
+			ret = jesd216_bfp_read_support(bfpt_header, bfp, JESD216_MODE_112, NULL);
+			if (ret < 0) {
+				LOG_WRN("Fast dual output mode not supported by SFDP");
+				data->qspi_cfg.rd_mode = NPCX_RD_MODE_FAST;
+			}
+			break;
+		case NPCX_RD_MODE_FAST_DUAL_IO:
+			ret = jesd216_bfp_read_support(bfpt_header, bfp, JESD216_MODE_122, NULL);
+			if (ret < 0) {
+				LOG_WRN("Fast dual IO mode not supported by SFDP");
+				data->qspi_cfg.rd_mode = NPCX_RD_MODE_FAST;
+			}
+			break;
+		case NPCX_RD_MODE_FAST_QUAD_OUTPUT:
+			ret = jesd216_bfp_read_support(bfpt_header, bfp, JESD216_MODE_114, NULL);
+			if (ret < 0) {
+				LOG_WRN("Fast quad output mode not supported by SFDP");
+				data->qspi_cfg.rd_mode = NPCX_RD_MODE_FAST;
+			}
+			break;
+		case NPCX_RD_MODE_FAST_QUAD_IO:
+			ret = jesd216_bfp_read_support(bfpt_header, bfp, JESD216_MODE_144, NULL);
+			if (ret < 0) {
+				LOG_WRN("Fast quad IO mode not supported by SFDP");
+				data->qspi_cfg.rd_mode = NPCX_RD_MODE_FAST;
+			}
+			break;
+		default:
+			LOG_WRN("Unsupported read mode: %d", data->qspi_cfg.rd_mode);
+			data->qspi_cfg.rd_mode = NPCX_RD_MODE_FAST;
+			break;
+	}
+
+	ret = jesd216_bfp_decode_dw15(bfpt_header, bfp, &dw15);
+	if (ret != 0) {
+		LOG_WRN("BFPT DW15 decode failed: %d", ret);
+	}
+	else {
+		data->qspi_cfg.qer_type = dw15.qer;
+	}
+
+	ret = jesd216_bfp_decode_dw16(bfpt_header, bfp, &dw16);
+	if (ret != 0) {
+		LOG_WRN("BFPT DW16 decode failed: %d", ret);
+		/* Keep the 4-byte address entry method described by the DTS */
+		dw16.enter_4ba = data->qspi_cfg.enter_4ba;
+	}
+
+	/* The default case keeps the configuration coming from the DTS */
+	switch (jesd216_bfp_addrbytes(bfp)) {
+		case JESD216_SFDP_BFP_DW1_ADDRBYTES_VAL_3B:
+			data->qspi_cfg.enter_4ba = 0;
+			data->qspi_cfg.four_byte_addr = false;
+			break;
+		case JESD216_SFDP_BFP_DW1_ADDRBYTES_VAL_3B4B:
+			data->qspi_cfg.enter_4ba = dw16.enter_4ba;
+			data->qspi_cfg.four_byte_addr = false;
+			break;
+		case JESD216_SFDP_BFP_DW1_ADDRBYTES_VAL_4B:
+			data->qspi_cfg.enter_4ba = 0;
+			data->qspi_cfg.four_byte_addr = true;
+			break;
+		default:
+			LOG_WRN("Unsupported address bytes: %d", jesd216_bfp_addrbytes(bfp));
+	}
+
+	return 0;
+}
+#endif /* CONFIG_FLASH_NPCX_FIU_NOR_SFDP_RUNTIME */
+
+/* Set the Quad Enable bit in the status register according to the QER type */
+static int flash_npcx_nor_quad_enable(const struct device *dev)
+{
+	struct flash_npcx_nor_data *data = dev->data;
+	uint8_t sts_reg[2] = {0};
+	uint8_t qe_idx, qe_bit;
+	int ret;
+
+	switch (data->qspi_cfg.qer_type) {
+	case JESD216_DW15_QER_S1B6:
+		qe_idx = 1;
+		qe_bit = 6;
+		break;
+	case JESD216_DW15_QER_S2B7:
+		qe_idx = 2;
+		qe_bit = 7;
+		break;
+	case JESD216_DW15_QER_S2B1v1:
+	case JESD216_DW15_QER_S2B1v4:
+	case JESD216_DW15_QER_S2B1v5:
+	case JESD216_DW15_QER_S2B1v6:
+		qe_idx = 2;
+		qe_bit = 1;
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	if (data->qspi_cfg.qer_type == JESD216_DW15_QER_S2B7) {
+		/* This QER exposes status register 2 through opcodes 0x3F/0x3E */
+		ret = flash_npcx_uma_read(dev, 0x3F, &sts_reg[1], 1);
+	} else {
+		ret = flash_npcx_nor_read_status_regs(dev, sts_reg, 2);
+	}
+
+	if (ret != 0) {
+		LOG_ERR("Enable quad access: read reg failed %d!", ret);
+		return ret;
+	}
+
+	/* quad mode is already enabled, no need to set the QE bit again */
+	if ((sts_reg[qe_idx - 1] & BIT(qe_bit)) != 0) {
 		return 0;
 	}
 
-	/* Enable quad access of spi NOR flash */
-	if (config->qspi_cfg.qer_type != JESD216_DW15_QER_NONE) {
-		uint8_t qe_idx, qe_bit, sts_reg[2];
-		/* Read status registers first */
-		ret = flash_npcx_nor_read_status_regs(dev, sts_reg);
+	sts_reg[qe_idx - 1] |= BIT(qe_bit);
+
+	switch (data->qspi_cfg.qer_type) {
+	case JESD216_DW15_QER_S1B6:
+		ret = flash_npcx_nor_write_status_regs(dev, sts_reg, 1);
+		break;
+	case JESD216_DW15_QER_S2B7:
+		ret = flash_npcx_nor_write_status_by_cmd(dev, 0x3E, &sts_reg[1], 1);
+		break;
+	case JESD216_DW15_QER_S2B1v6:
+		ret = flash_npcx_nor_write_status_by_cmd(dev, SPI_NOR_CMD_WRSR2, &sts_reg[1], 1);
+		break;
+	default:
+		ret = flash_npcx_nor_write_status_regs(dev, sts_reg, 2);
+		break;
+	}
+
+	if (ret != 0) {
+		LOG_ERR("Enable quad access: write reg failed %d!", ret);
+	}
+
+	return ret;
+}
+
+/* Enter 4-byte address mode using the methods advertised by JESD216 DW16 */
+static int flash_npcx_nor_enter_4ba(const struct device *dev)
+{
+	struct flash_npcx_nor_data *data = dev->data;
+	uint8_t enter_4ba = data->qspi_cfg.enter_4ba;
+	int ret;
+
+	/* All bits set means the supported methods are unknown */
+	if (enter_4ba == 0xff) {
+		return -ENOTSUP;
+	}
+
+	if (enter_4ba & BIT(6)) {
+		/* flash always operates in 4-Byte address mode */
+		return 0;
+	}
+
+	/* Only the 4BA instruction, with or without a preceding WREN, is supported */
+	if ((enter_4ba & (BIT(0) | BIT(1))) == 0) {
+		return -ENOTSUP;
+	}
+
+	if (enter_4ba & BIT(1)) {
+		ret = flash_npcx_uma_cmd_only(dev, SPI_NOR_CMD_WREN);
 		if (ret != 0) {
-			LOG_ERR("Enable quad access: read reg failed %d!", ret);
+			LOG_ERR("Enable 4byte addr: WREN failed %d!", ret);
 			return ret;
 		}
-		switch (config->qspi_cfg.qer_type) {
-		case JESD216_DW15_QER_S1B6:
-			qe_idx = 1;
-			qe_bit = 6;
-			break;
-		case JESD216_DW15_QER_S2B1v1:
-			__fallthrough;
-		case JESD216_DW15_QER_S2B1v4:
-			__fallthrough;
-		case JESD216_DW15_QER_S2B1v5:
-			qe_idx = 2;
-			qe_bit = 1;
-			break;
-		default:
-			return -ENOTSUP;
-		}
-		/* Set QE bit in status register */
-		sts_reg[qe_idx - 1] |= BIT(qe_bit);
-		ret = flash_npcx_nor_write_status_regs(dev, sts_reg);
-		if (ret != 0) {
-			LOG_ERR("Enable quad access: write reg failed %d!", ret);
-			return ret;
+	}
+
+	ret = flash_npcx_uma_cmd_only(dev, SPI_NOR_CMD_4BA);
+	if (ret != 0) {
+		LOG_ERR("Enable 4byte addr: 4BA failed %d!", ret);
+	}
+
+	return ret;
+}
+
+static int flash_npcx_nor_init(const struct device *dev)
+{
+	struct flash_npcx_nor_data *data = dev->data;
+	int ret;
+
+	if (!IS_ENABLED(CONFIG_FLASH_NPCX_FIU_NOR_INIT)) {
+		/* Without the sequence below only a permanently 4-byte device qualifies */
+		data->qspi_cfg.four_byte_addr = (data->qspi_cfg.enter_4ba & BIT(6)) != 0;
+		return 0;
+	}
+
+#ifdef CONFIG_FLASH_NPCX_FIU_NOR_SFDP_RUNTIME
+	ret = flash_npcx_nor_sfdp_config(dev);
+	if (ret != 0) {
+		LOG_WRN("SFDP runtime configuration failed: %d", ret);
+		LOG_WRN("Proceeding with default configuration from the DTS");
+	}
+#endif /* CONFIG_FLASH_NPCX_FIU_NOR_SFDP_RUNTIME */
+
+	if ((data->qspi_cfg.rd_mode == NPCX_RD_MODE_FAST_QUAD_IO) || 
+	    (data->qspi_cfg.rd_mode == NPCX_RD_MODE_FAST_QUAD_OUTPUT)) {
+		/* Enable quad access of spi NOR flash */
+		if (data->qspi_cfg.qer_type != JESD216_DW15_QER_NONE) {
+			ret = flash_npcx_nor_quad_enable(dev);
+			if (ret != 0) {
+				LOG_ERR("Quad enable failed %d, fall back to fast read!", ret);
+				data->qspi_cfg.rd_mode = NPCX_RD_MODE_FAST;
+			}
 		}
 	}
 
 	/* Enable 4-byte address of spi NOR flash */
-	if (config->qspi_cfg.enter_4ba != 0) {
-		bool wr_en = (config->qspi_cfg.enter_4ba & 0x02) != 0;
-
-		if (wr_en) {
-			ret = flash_npcx_uma_cmd_only(dev, SPI_NOR_CMD_WREN);
-			if (ret != 0) {
-				LOG_ERR("Enable 4byte addr: WREN failed %d!", ret);
-				return ret;
-			}
-		}
-		ret = flash_npcx_uma_cmd_only(dev, SPI_NOR_CMD_4BA);
+	if (data->qspi_cfg.enter_4ba != 0) {
+		ret = flash_npcx_nor_enter_4ba(dev);
 		if (ret != 0) {
-			LOG_ERR("Enable 4byte addr: 4BA failed %d!", ret);
-			return ret;
+			LOG_ERR("Enter 4-byte address mode failed %d!", ret);
+			data->qspi_cfg.four_byte_addr = false;
+		}
+		else {
+			data->qspi_cfg.four_byte_addr = true;
 		}
 	}
 
@@ -591,30 +858,33 @@ static int flash_npcx_nor_init(const struct device *dev)
 }
 
 #define NPCX_FLASH_NOR_INIT(n)							\
-BUILD_ASSERT(DT_INST_QUAD_EN_PROP_OR(n) == JESD216_DW15_QER_NONE ||		\
-	     DT_INST_STRING_TOKEN(n, rd_mode) == NPCX_RD_MODE_FAST_DUAL,	\
-	     "Fast Dual IO read must be selected in Quad mode");		\
+BUILD_ASSERT(IS_ENABLED(CONFIG_SOC_SERIES_NPCX4) ||				\
+	     (DT_INST_STRING_TOKEN(n, rd_mode) != NPCX_RD_MODE_FAST_DUAL_OUTPUT	\
+	      && DT_INST_STRING_TOKEN(n, rd_mode) != NPCX_RD_MODE_FAST_QUAD_OUTPUT),\
+	     "Fast Dual/Quad Output read is only supported by the NPCX4 series");\
 PINCTRL_DT_INST_DEFINE(n);							\
 static const struct flash_npcx_nor_config flash_npcx_nor_config_##n = {		\
 	.qspi_bus = DEVICE_DT_GET(DT_PARENT(DT_DRV_INST(n))),			\
 	.mapped_addr = DT_INST_PROP(n, mapped_addr),				\
-	.flash_size = DT_INST_PROP(n, size) / 8,				\
 	.max_timeout = DT_INST_PROP(n, max_timeout),				\
+};										\
+static struct flash_npcx_nor_data flash_npcx_nor_data_##n = {			\
+	.flash_size = DT_INST_PROP(n, size) / 8,				\
 	.qspi_cfg = {								\
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(n),			\
 		.flags = DT_INST_PROP(n, qspi_flags),				\
 		.enter_4ba = DT_INST_PROP_OR(n, enter_4byte_addr, 0),		\
 		.qer_type = DT_INST_QUAD_EN_PROP_OR(n),				\
 		.rd_mode = DT_INST_STRING_TOKEN(n, rd_mode),			\
+		.four_byte_addr = false, 							\
 	},									\
 	IF_ENABLED(CONFIG_FLASH_PAGE_LAYOUT, (					\
 		.layout = {							\
 			.pages_count = DT_INST_PROP(n, size) /			\
-				      (8 * SPI_NOR_PAGE_SIZE),			\
-			.pages_size  = SPI_NOR_PAGE_SIZE,			\
+					      (8 * SPI_NOR_PAGE_SIZE),			\
+			.pages_size  = SPI_NOR_PAGE_SIZE,				\
 		},))								\
 };										\
-static struct flash_npcx_nor_data flash_npcx_nor_data_##n;			\
 DEVICE_DT_INST_DEFINE(n, flash_npcx_nor_init, NULL,				\
 		      &flash_npcx_nor_data_##n, &flash_npcx_nor_config_##n,	\
 		      POST_KERNEL, CONFIG_FLASH_INIT_PRIORITY,			\

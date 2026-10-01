@@ -1669,6 +1669,14 @@ struct fiu_reg {
 
 #define NPCX_MSR_IE_CFG_UMA_BLOCK        3
 
+/* SPI Flash read mode definitions */
+#define SPI_FL_CFG_RD_MODE_NORMAL   	 0
+#define SPI_FL_CFG_RD_MODE_FAST     	 1
+#if defined(CONFIG_SOC_SERIES_NPCX4)
+#define SPI_FL_CFG_RD_MODE_FAST_OUTPUT 	 2
+#endif /* CONFIG_SOC_SERIES_NPCX4 */
+#define SPI_FL_CFG_RD_MODE_FAST_IO     	 3
+
 /* UMA fields selections */
 #define UMA_FLD_ADDR     BIT(NPCX_UMA_CTS_A_SIZE)  /* 3-bytes ADR field */
 #define UMA_FLD_NO_CMD   BIT(NPCX_UMA_CTS_C_SIZE)  /* No 1-Byte CMD field */

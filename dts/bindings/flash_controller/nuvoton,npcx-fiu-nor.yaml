@@ -38,15 +38,18 @@ properties:
     description: The definitions for configuring the Quad-SPI peripherals.
   rd-mode:
     type: string
-    default: "NPCX_RD_MODE_FAST_DUAL"
+    default: "NPCX_RD_MODE_FAST_DUAL_IO"
     description: |
       Selects the SPI read access type of Direct Read Access. Usually, we choose
       Fast Read Dual I/O mode for better performance. If the nor spi flash does
       not support this mode, please set this property explicitly.
     enum:
-      - "NPCX_RD_MODE_NORMAL" # Direct read access by command code 03h
-      - "NPCX_RD_MODE_FAST" # Direct read access by command code 0bh
-      - "NPCX_RD_MODE_FAST_DUAL" # Direct read access by command code bbh
+      - "NPCX_RD_MODE_NORMAL"           # Direct read access by command code 03h
+      - "NPCX_RD_MODE_FAST"             # Direct read access by command code 0bh
+      - "NPCX_RD_MODE_FAST_DUAL_OUTPUT" # Direct read access by command code 3bh
+      - "NPCX_RD_MODE_FAST_DUAL_IO"     # Direct read access by command code bbh
+      - "NPCX_RD_MODE_FAST_QUAD_OUTPUT" # Direct read access by command code 6bh
+      - "NPCX_RD_MODE_FAST_QUAD_IO"     # Direct read access by command code ebh
 
   erase-block-size:
     type: int

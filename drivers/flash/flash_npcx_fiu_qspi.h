@@ -44,6 +44,8 @@ struct npcx_qspi_cfg {
 	enum jesd216_dw15_qer_type qer_type;
 	/* Pinctrl for QSPI bus */
 	const struct pinctrl_dev_config *pcfg;
+	/* four byte address mode support */
+	bool four_byte_addr;
 	/* Enter four bytes address mode value */
 	uint8_t enter_4ba;
 	/* SPI read access type of Direct Read Access mode */

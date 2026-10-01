@@ -18,8 +18,11 @@
 #define NPCX_QSPI_SEC_FLASH_SL	BIT(4)
 
 /* Supported read mode for Direct Read Access */
-#define NPCX_RD_MODE_NORMAL	0
-#define NPCX_RD_MODE_FAST	1
-#define NPCX_RD_MODE_FAST_DUAL	3
+#define NPCX_RD_MODE_NORMAL	            0
+#define NPCX_RD_MODE_FAST	            1
+#define NPCX_RD_MODE_FAST_DUAL_OUTPUT	2
+#define NPCX_RD_MODE_FAST_DUAL_IO	    3
+#define NPCX_RD_MODE_FAST_QUAD_OUTPUT	4
+#define NPCX_RD_MODE_FAST_QUAD_IO	    5
 
 #endif /* ZEPHYR_INCLUDE_DT_BINDINGS_CLOCK_NPCK_FIU_QSPI_H_ */
