@@ -50,4 +50,23 @@
 #define NPCX_VWGPSM14 14
 #define NPCX_VWGPSM15 15
 
+/* eSPI VW GPIO Master to Slave Register Index */
+#define NPCX_VWGPMS0 0
+#define NPCX_VWGPMS1 1
+#define NPCX_VWGPMS2 2
+#define NPCX_VWGPMS3 3
+#define NPCX_VWGPMS4 4
+#define NPCX_VWGPMS5 5
+#define NPCX_VWGPMS6 6
+#define NPCX_VWGPMS7 7
+#define NPCX_VWGPMS8 8
+#define NPCX_VWGPMS9 9
+#define NPCX_VWGPMS10 10
+#define NPCX_VWGPMS11 11
+#define NPCX_VWGPMS12 12
+#define NPCX_VWGPMS13 13
+#define NPCX_VWGPMS14 14
+#define NPCX_VWGPMS15 15
+
+
 #endif /* ZEPHYR_INCLUDE_DT_BINDINGS_ESPI_NPCX_ESPI_H_ */

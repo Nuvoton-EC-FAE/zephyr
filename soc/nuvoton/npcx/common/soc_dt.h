@@ -348,6 +348,23 @@
 	}
 
 /**
+ * @brief Construct a npcx espi device configuration of vw input GPIO signal from
+ * a child node with that path.
+ *
+ * @signal vw input GPIO signal name.
+ * @param name a path which name is /npcx-espi-vws-map/'name'.
+ * @return npcx_vw_in_gpio_config item with that path.
+ */
+#define NPCX_DT_VW_GPIO_IN_CONF(signal, name)                                      \
+	{                                                                      \
+	  .sig = signal,                                                       \
+	  .reg_idx = DT_PROP_BY_IDX(NPCX_DT_NODE_FROM_VWTABLE(name), vw_reg,   \
+									0),    \
+	  .bitmask = DT_PROP_BY_IDX(NPCX_DT_NODE_FROM_VWTABLE(name), vw_reg,   \
+									1),    \
+	}
+
+/**
  * @brief Construct a npcx_lvol structure from 'lvol-maps' property at index 'i'.
  *
  * @param node_id Node identifier.

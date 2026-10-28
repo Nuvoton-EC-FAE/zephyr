@@ -670,7 +670,9 @@ struct espi_reg {
 	volatile uint32_t reserved5[4];
 	/* 0x180 - 1BF: Virtual Wire GPIO Event Master-to-Slave 0 - 15 */
 	volatile uint32_t VWGPSM[16];
-	volatile uint32_t reserved6[79];
+	/* 0x1C0 - 1FF: Virtual Wire GPIO Event Slave-to-Master 0 - 15 */
+	volatile uint32_t VWGPMS[16];
+	volatile uint32_t reserved6[63];
 	/* 0x2FC: Virtual Wire Channel Control */
 	volatile uint32_t VWCTL;
 	/* 0x300 - 34F: OOB Receive Buffer 0 - 19 */
@@ -799,13 +801,26 @@ struct espi_reg {
 #define NPCX_VWSWIRQ_EDGE_IRQ            28
 #define NPCX_VWEVMS_WIRE                 FIELD(0, 4)
 #define NPCX_VWEVMS_VALID                FIELD(4, 4)
+#define NPCX_VWEVMS_MODIFIED             16
 #define NPCX_VWEVMS_IE                   18
 #define NPCX_VWEVMS_WE                   20
 #define NPCX_VWEVSM_WIRE                 FIELD(0, 4)
 #define NPCX_VWEVSM_VALID                FIELD(4, 4)
 #define NPCX_VWEVSM_BIT_VALID(n)         (4+n)
 #define NPCX_VWEVSM_HW_WIRE              FIELD(24, 4)
+#define NPCX_VWGPSM_WIRE                 FIELD(0, 4)
+#define NPCX_VWGPSM_VALID                FIELD(4, 4)
 #define NPCX_VWGPSM_INDEX_EN             15
+#define NPCX_VWGPSM_DIRTY                16
+#define NPCX_VWGPSM_ENPLTRST             17
+#define NPCX_VWGPMS_WIRE                 FIELD(0, 4)
+#define NPCX_VWGPMS_VALID                FIELD(4, 4)
+#define NPCX_VWGPMS_INDEX_EN             15
+#define NPCX_VWGPMS_MODIFIED             16
+#define NPCX_VWGPMS_ENPLTRST             17
+#define NPCX_VWGPMS_IE                   18
+#define NPCX_VWGPMS_ENNSPIRST            19
+#define NPCX_VWGPMS_WE                   20
 #define NPCX_OOBCTL_OOB_FREE             0
 #define NPCX_OOBCTL_OOB_AVAIL            1
 #define NPCX_OOBCTL_RSTBUFHEADS          2
